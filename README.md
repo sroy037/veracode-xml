@@ -33,23 +33,23 @@ pip install .
 ## 🧠 CLI Usage
 ```
 # General pattern
-veracode-xml -t <task> [task-specific parameters]
+veracode-xml <task> [task-specific parameters]
 
 # Example: Fetch detailed report for latest dynamic scan
-veracode-xml -t detailed_report -n "Customer Portal" -f PDF -s ds
+veracode-xml detailed_report -n "Customer Portal" -f PDF -s ds
 
 # Example: List all applications
-veracode-xml -t app_list
+veracode-xml app_list
 
 # Example: Get info for a specific app
-veracode-xml -t app_info -i 1922487
+veracode-xml app_info -i 1922487
 
 # Example: Get info for a specific build (latest if build_id omitted)
-veracode-xml -t build_info -n "Customer Portal" -s ds
+veracode-xml build_info -n "Customer Portal" -s ds
 ```
 ⚠️ Use -h or --help with any task to see all available parameters and defaults:
 ```
-veracode-xml -t detailed_report -h
+veracode-xml detailed_report -h
 ```
 ---
 ## 🧩 Supported Tasks
