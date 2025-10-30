@@ -28,7 +28,7 @@ def main():
     # Dynamically load each task module and set up its parser
     for task_name in SUPPORTED_TASKS:
         try:
-            module = importlib.import_module(f"veracode_xml.tasks.{task_name}")
+            module = importlib.import_module(f"xml_api_cli.tasks.{task_name}")
             help_text = getattr(module, "HELP_TEXT", f"Execute the '{task_name}' task")
             task_parser = subparsers.add_parser(task_name, help=help_text)
             if hasattr(module, "setup_parser"):
@@ -45,7 +45,7 @@ def main():
 
     # Dynamically import the selected task module
     try:
-        task_module = importlib.import_module(f"veracode_xml.tasks.{args.task}")
+        task_module = importlib.import_module(f"xml_api_cli.tasks.{args.task}")
     except ModuleNotFoundError:
         print(f"❌ Task '{args.task}' is not implemented or missing.")
         sys.exit(1)
