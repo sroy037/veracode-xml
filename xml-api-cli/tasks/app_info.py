@@ -9,8 +9,8 @@ import os
 import requests
 import xml.etree.ElementTree as ET
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
-from veracode_xml.utils.api_helpers import find_app_by_name, pretty_print_xml
-from veracode_xml.config import xml_api_v5_base
+from xml_api_cli.utils.api_helpers import find_app_by_name, pretty_print_xml
+from xml_api_cli.config import xml_api_v5_base
 
 HELP_TEXT = "Fetch detailed info for a specific Veracode application by app_id or app_name."
 
