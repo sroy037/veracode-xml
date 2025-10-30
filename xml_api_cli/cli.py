@@ -18,7 +18,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    # Create subcommands (e.g. veracode-xml detailed_report ...)
+    # Create subcommands (e.g. xml-api-cli detailed_report ...)
     subparsers = parser.add_subparsers(
         title="Available Tasks",
         dest="task",
