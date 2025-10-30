@@ -14,7 +14,7 @@ SUPPORTED_TASKS = [
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🧩 Veracode XML CLI — unified interface for Veracode XML API tasks",
+        description="🧩 XML API CLI — unified interface for Veracode XML API tasks",
         formatter_class=argparse.RawTextHelpFormatter
     )
 

@@ -1,7 +1,7 @@
 import os
 import requests
 import xml.etree.ElementTree as ET
-from veracode_xml.config import (
+from xml_api_cli.config import (
     endpoint_getapplist,
     endpoint_getappinfo,
     endpoint_getbuildlist,

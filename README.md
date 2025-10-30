@@ -1,4 +1,4 @@
-# 🧩 Veracode XML CLI
+# 🧩 XML CLI
 
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -22,8 +22,8 @@ fetch detailed reports, builds, and more — all secured with **HMAC authenticat
 ## ⚙️ Installation
 
 ```bash
-git clone https://github.com/sroy037/veracode-xml.git
-cd veracode-xml
+git clone https://github.com/sroy037/xml-api-cli.git
+cd xml-api-cli
 pip install -r requirements.txt
 pip install .
 ```
@@ -33,23 +33,23 @@ pip install .
 ## 🧠 CLI Usage
 ```
 # General pattern
-veracode-xml <task> [task-specific parameters]
+xml-api-cli <task> [task-specific parameters]
 
 # Example: Fetch detailed report for latest dynamic scan
-veracode-xml detailed_report -n "Customer Portal" -f PDF -s ds
+xml-api-cli detailed_report -n "Customer Portal" -f PDF -s ds
 
 # Example: List all applications
-veracode-xml app_list
+xml-api-cli app_list
 
 # Example: Get info for a specific app
-veracode-xml app_info -i 1922487
+xml-api-cli app_info -i 1922487
 
 # Example: Get info for a specific build (latest if build_id omitted)
-veracode-xml build_info -n "Customer Portal" -s ds
+xml-api-cli build_info -n "Customer Portal" -s ds
 ```
 ⚠️ Use -h or --help with any task to see all available parameters and defaults:
 ```
-veracode-xml detailed_report -h
+xml-api-cli detailed_report -h
 ```
 ---
 ## 🧩 Supported Tasks
@@ -69,11 +69,11 @@ veracode-xml detailed_report -h
 ```
 🔹 Get Static Scan Report (XML)
 
-veracode-xml detailed_report -n "Core Banking App" -f XML -s ss
+xml-api-cli detailed_report -n "Core Banking App" -f XML -s ss
 
 🔸 Get Dynamic Scan Report (PDF)
 
-veracode-xml detailed_report -n "Customer Portal" -f PDF -s ds \
+xml-api-cli detailed_report -n "Customer Portal" -f PDF -s ds \
   -o ~/Downloads -p dyn_
 ```
 
@@ -103,7 +103,7 @@ def run(args):
     print(f"Running new task: {args.task}")
 Then invoke:
 
-veracode-xml my_new_task
+xml-api-cli my_new_task
 ```
 
 ---
@@ -111,7 +111,7 @@ veracode-xml my_new_task
 ## 🧪 Development Setup
 ```
 # From project root
-python -m veracode_xml.cli detailed_report -n "My App" -f XML -s ds
+python -m xml-api-cli.cli detailed_report -n "My App" -f XML -s ds
 
 Or install in editable mode:
 
