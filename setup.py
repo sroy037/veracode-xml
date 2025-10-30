@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="xml-api-cli",
+    name="xml_api_cli",
     version="1.0.0",
     description="Unified CLI for Veracode XML API tasks.",
     author="Soumik Roy",
