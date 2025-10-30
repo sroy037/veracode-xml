@@ -22,7 +22,7 @@ fetch detailed reports, builds, and more — all secured with **HMAC authenticat
 ## ⚙️ Installation
 
 ```bash
-git clone https://github.com/Samab2024/veracode-xml.git
+git clone https://github.com/sroy037/veracode-xml.git
 cd veracode-xml
 pip install -r requirements.txt
 pip install .
