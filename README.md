@@ -69,11 +69,11 @@ veracode-xml detailed_report -h
 ```
 🔹 Get Static Scan Report (XML)
 
-veracode-xml -t detailed_report -n "Core Banking App" -f XML -s ss
+veracode-xml detailed_report -n "Core Banking App" -f XML -s ss
 
 🔸 Get Dynamic Scan Report (PDF)
 
-veracode-xml -t detailed_report -n "Customer Portal" -f PDF -s ds \
+veracode-xml detailed_report -n "Customer Portal" -f PDF -s ds \
   -o ~/Downloads -p dyn_
 ```
 
@@ -103,7 +103,7 @@ def run(args):
     print(f"Running new task: {args.task}")
 Then invoke:
 
-veracode-xml -t my_new_task
+veracode-xml my_new_task
 ```
 
 ---
@@ -111,7 +111,7 @@ veracode-xml -t my_new_task
 ## 🧪 Development Setup
 ```
 # From project root
-python -m veracode_xml.cli -t detailed_report -n "My App" -f XML -s ds
+python -m veracode_xml.cli detailed_report -n "My App" -f XML -s ds
 
 Or install in editable mode:
 
