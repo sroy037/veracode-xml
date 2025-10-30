@@ -40,7 +40,7 @@ def run(args):
             app_id = app.attrib.get("app_id")
             name = app.attrib.get("app_name")
             policy_upd = app.attrib.get("policy_updated_date")
-            print(f"• {name} (ID: {app_id}, Last_Policy_Check: {policy_upd})")
+            print(f"• {name:<35}\tID: {app_id:<8}\tLast Policy Check: {policy_upd}")
 
     except ET.ParseError as e:
         print(f"❌ Failed to parse XML: {e}")
