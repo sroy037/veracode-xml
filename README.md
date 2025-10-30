@@ -22,8 +22,8 @@ fetch detailed reports, builds, and more — all secured with **HMAC authenticat
 ## ⚙️ Installation
 
 ```bash
-git clone https://github.com/sroy037/xml-api-cli.git
-cd xml-api-cli
+git clone https://github.com/sroy037/xml_api_cli.git
+cd xml_api_cli
 pip install -r requirements.txt
 pip install .
 ```
@@ -33,23 +33,23 @@ pip install .
 ## 🧠 CLI Usage
 ```
 # General pattern
-xml-api-cli <task> [task-specific parameters]
+xml_api_cli <task> [task-specific parameters]
 
 # Example: Fetch detailed report for latest dynamic scan
-xml-api-cli detailed_report -n "Customer Portal" -f PDF -s ds
+xml_api_cli detailed_report -n "Customer Portal" -f PDF -s ds
 
 # Example: List all applications
-xml-api-cli app_list
+xml_api_cli app_list
 
 # Example: Get info for a specific app
-xml-api-cli app_info -i 1922487
+xml_api_cli app_info -i 1922487
 
 # Example: Get info for a specific build (latest if build_id omitted)
-xml-api-cli build_info -n "Customer Portal" -s ds
+xml_api_cli build_info -n "Customer Portal" -s ds
 ```
 ⚠️ Use -h or --help with any task to see all available parameters and defaults:
 ```
-xml-api-cli detailed_report -h
+xml_api_cli detailed_report -h
 ```
 ---
 ## 🧩 Supported Tasks
@@ -69,11 +69,11 @@ xml-api-cli detailed_report -h
 ```
 🔹 Get Static Scan Report (XML)
 
-xml-api-cli detailed_report -n "Core Banking App" -f XML -s ss
+xml_api_cli detailed_report -n "Core Banking App" -f XML -s ss
 
 🔸 Get Dynamic Scan Report (PDF)
 
-xml-api-cli detailed_report -n "Customer Portal" -f PDF -s ds \
+xml_api_cli detailed_report -n "Customer Portal" -f PDF -s ds \
   -o ~/Downloads -p dyn_
 ```
 
@@ -103,7 +103,7 @@ def run(args):
     print(f"Running new task: {args.task}")
 Then invoke:
 
-xml-api-cli my_new_task
+xml_api_cli my_new_task
 ```
 
 ---
@@ -111,7 +111,7 @@ xml-api-cli my_new_task
 ## 🧪 Development Setup
 ```
 # From project root
-python -m xml-api-cli.cli detailed_report -n "My App" -f XML -s ds
+python -m xml_api_cli.cli detailed_report -n "My App" -f XML -s ds
 
 Or install in editable mode:
 
