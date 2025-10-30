@@ -1,5 +1,5 @@
 """
-veracode_xml.config
+xml_api_cli.config
 
 Centralized configuration for Veracode XML/REST API endpoints and defaults.
 
@@ -20,15 +20,15 @@ Region = Literal["us", "eu", "us_fed"]
 # ---------------------------------------------------------------------
 # Version / metadata
 # ---------------------------------------------------------------------
-TOOL_NAME = "veracode-xml"
-VERSION = os.getenv("VERACODE_XML_VERSION", "1.0.0")
+TOOL_NAME = "xml-api-cli"
+VERSION = os.getenv("XML_API_CLI_VERSION", "1.0.0")
 DESCRIPTION = "CLI utilities for Veracode XML/REST APIs (modular tasks)."
 
 # ---------------------------------------------------------------------
 # Environment overrides (optional)
 # Use these to override endpoints (useful for testing or private proxies)
 # ---------------------------------------------------------------------
-ENV_VERACODE_XML_BASE = os.getenv("VERACODE_XML_BASE")         # e.g. https://analysiscenter.veracode.com/api/
+ENV_XML_API_CLI_BASE = os.getenv("XML_API_CLI_BASE")         # e.g. https://analysiscenter.veracode.com/api/
 ENV_VERACODE_REST_BASE = os.getenv("VERACODE_REST_BASE")       # e.g. https://api.veracode.com/
 
 # ---------------------------------------------------------------------
@@ -71,8 +71,8 @@ def api_base_xml(region: Region = DEFAULT_REGION) -> str:
     Note: callers should append the API version/endpoint as needed.
     """
     # Allow full override via env var
-    if ENV_VERACODE_XML_BASE:
-        base = ENV_VERACODE_XML_BASE
+    if ENV_XML_API_CLI_BASE:
+        base = ENV_XML_API_CLI_BASE
         if not base.endswith("/"):
             base += "/"
         return base

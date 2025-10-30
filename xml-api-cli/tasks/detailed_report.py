@@ -1,5 +1,5 @@
 import os
-from veracode_xml.utils.api_helpers import (
+from xml_api_cli.utils.api_helpers import (
     find_app_by_name,
     get_latest_build_id,
     fetch_detailed_report,

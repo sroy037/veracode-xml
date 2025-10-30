@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 import requests
 import sys
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
-from veracode_xml.config import endpoint_getbuildlist, endpoint_getapplist
-from veracode_xml.utils.api_helpers import find_app_by_name
+from xml_api_cli.config import endpoint_getbuildlist, endpoint_getapplist
+from xml_api_cli.utils.api_helpers import find_app_by_name
 
 HELP_TEXT = "🧱 List all builds under a specific application."
 
