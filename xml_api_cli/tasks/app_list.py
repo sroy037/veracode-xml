@@ -6,7 +6,7 @@ Reference: https://docs.veracode.com/r/r_getapplist
 import xml.etree.ElementTree as ET
 import requests
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
-from xml-api-cli.config import endpoint_getapplist
+from xml_api_cli.config import endpoint_getapplist
 
 HELP_TEXT = "Fetch list of all applications in your Veracode account."
 
