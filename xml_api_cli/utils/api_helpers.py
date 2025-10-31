@@ -10,7 +10,7 @@ from xml_api_cli.config import (
     endpoint_detailedreport_pdf,
     endpoint_summaryreport_xml,
     endpoint_summaryreport_pdf,
-    endpoint_mitigationreviewer_xml,
+    endpoint_mitigationreviewer,
     DEFAULT_REGION,
 )
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
@@ -162,7 +162,7 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
 
     return ET.fromstring(response.text)
 
-def fetch_build_issues(app_id: str, build_id: str, region=config.DEFAULT_REGION) -> list[dict]:
+def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION) -> list[dict]:
     """
     Fetch issues for given app_id and latest build_id from Veracode Detailed Report (XML).
     """
