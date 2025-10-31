@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import textwrap
 import sys
 import importlib
 
@@ -16,7 +17,12 @@ SUPPORTED_TASKS = [
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🧩 XML API CLI — unified interface for Veracode XML API tasks",
+        description=textwrap.dedent("""\
+            🧩 XML API CLI — Unified Interface for Veracode XML API Tasks
+            ─────────────────────────────────────────────────────────────
+            ⚠️  Note: This is *not* an official Veracode-supported tool.
+                For any issues or feature requests, please contact the tool owner.
+        """),
         formatter_class=argparse.RawTextHelpFormatter
     )
 
