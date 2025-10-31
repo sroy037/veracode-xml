@@ -5,11 +5,12 @@ import importlib
 
 # List all supported tasks (matching modules under tasks/)
 SUPPORTED_TASKS = [
-    "detailed_report",
     "app_list",
     "app_info",
     "build_list",
     "build_info",
+    "detailed_report",
+    "summary_report"
 ]
 
 def main():
