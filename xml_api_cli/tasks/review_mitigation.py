@@ -119,19 +119,20 @@ def run(args):
 
     print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
     issue_ids_param = ",".join([str(i) for i in issue_ids])
-    root = fetch_mitigation_info(app_id, build_id, issue_ids_param, args.region)
-    print(root)
-    mitigations = root.findall(".//mitigationinfo")
+    mitigations = fetch_mitigation_info(app_id, build_id, selected_ids_param, region=args.region)
 
     if not mitigations:
         print("❌ No mitigation details found for provided issue(s).")
-        return
-
-    print("\n✅ Mitigation Details:")
-    for m in mitigations:
-        issue_id = m.get("issue_id", "N/A")
-        status = m.get("status", "N/A")
-        date = m.get("date", "N/A")
-        comment = m.findtext("comment", "(No comment)")
-        reviewer = m.findtext("reviewer", "(N/A)")
-        print(f"• Issue: {issue_id}\n  Status: {status}\n  Date: {date}\n  Reviewer: {reviewer}\n  Comment: {comment}\n")
+    else:
+        print("\n✅ Mitigation Details:")
+        for m in mitigations:
+            print(f"\n• Issue: {m['flaw_id']} - {m['category']}")
+            if not m['mitigations']:
+                print("  (No mitigations)")
+                continue
+            for ma in m['mitigations']:
+                print(f"  • Action: {ma['action']}")
+                print(f"    Desc: {ma['desc']}")
+                print(f"    Reviewer: {ma.get('reviewer','N/A')}")
+                print(f"    Date: {ma.get('date','N/A')}")
+                print(f"    Comment: {ma.get('comment','(No comment)')}")
