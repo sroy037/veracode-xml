@@ -149,6 +149,9 @@ def endpoint_summaryreport_pdf(region: Region = DEFAULT_REGION) -> str:
     # PDF endpoint is historically on v4
     return xml_api_v4_base(region) + "summaryreportpdf.do"
 
+def endpoint_mitigationreviewer_xml(region: Region = DEFAULT_REGION) -> str:
+    return api_base_xml(region) + "getmitigationinfo.do"
+
 # ---------------------------------------------------------------------
 # Misc helpers
 # ---------------------------------------------------------------------
