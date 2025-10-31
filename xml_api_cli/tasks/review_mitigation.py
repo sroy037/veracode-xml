@@ -84,8 +84,8 @@ def run(args):
             return
         tree = ET.parse(args.file)
         root = tree.getroot()
-        issue_ids = [elem.get("issue_id") for elem in root.findall(".//issue")]
-        print(f"📄 Loaded {len(issue_ids)} issue(s) from file '{args.file}'")
+        issues = [elem.get("issue_id") for elem in root.findall(".//issue")]
+        print(f"📄 Loaded {len(issues)} issue(s) from file '{args.file}'")
     else:
         # Resolve app_id if only app_name is provided
         app_id = args.app_id
