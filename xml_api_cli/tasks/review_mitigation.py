@@ -91,7 +91,9 @@ def run(args):
         total_flaws = int(root.attrib.get("total_flaws", "0"))
         if total_flaws == 0:
             return []
-    
+
+        app_id = root.get("app_id")
+        build_id = root.get("build_id")
         issues = []
         # Traverse CWEs → staticflaws → flaw
         for cwe in root.findall(".//v:cwe", ns):
