@@ -14,7 +14,7 @@ from xml_api_cli.utils.api_helpers import (
     fetch_build_issues,
 )
 
-HELP_TEXT = "Fetch mitigation information for issues."
+HELP_TEXT = "🧠 Fetch mitigation information for issues."
 
 def setup_parser(parser):
     parser.add_argument(
