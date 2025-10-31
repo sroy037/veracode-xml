@@ -2,10 +2,10 @@ import os
 from xml_api_cli.utils.api_helpers import (
     find_app_by_name,
     get_latest_build_id,
-    fetch_detailed_report,
+    fetch_summary_report,
 )
 
-HELP_TEXT = "Fetch detailed report (XML/PDF) for a specific app/build."
+HELP_TEXT = "Fetch summary report (XML/PDF) for a specific app/build."
 
 def setup_parser(parser):
     parser.add_argument("-i", "--app_id", help="Veracode App ID (required if --app_name not used)")
@@ -44,7 +44,7 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
         print("Invalid choice. Please try again.")
 
 def run(args):
-    print("📘 Task: Fetch Detailed Report")
+    print("📘 Task: Fetch Summary Report")
 
     # Determine app_id
     app_id = args.app_id
@@ -69,7 +69,8 @@ def run(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Fetch the file
-    file_path = fetch_detailed_report(app_id, build_id, args.format, args.output_dir, args.prefix)
+    file_path = fetch_summary_report(app_id, build_id, args.format, args.output_dir, args.prefix)
 
     # Print confirmation with full path
     print(f"✅ Report downloaded successfully: {os.path.abspath(file_path)}")
+
