@@ -97,7 +97,7 @@ def fetch_detailed_report(app_id: str, build_id: str, format_type: str, output_d
     resp.raise_for_status()
 
     os.makedirs(os.path.expanduser(output_dir), exist_ok=True)
-    filename = f"{f'{prefix}_' if prefix else ''}{app_id}_{build_id}_report.{extension}"
+    filename = f"{f'{prefix}_' if prefix else ''}{app_id}_{build_id}_detailed_report.{extension}"
     filepath = os.path.join(os.path.expanduser(output_dir), filename)
 
     with open(filepath, "wb") as f:
@@ -119,7 +119,7 @@ def fetch_summary_report(app_id: str, build_id: str, format_type: str, output_di
     resp.raise_for_status()
 
     os.makedirs(os.path.expanduser(output_dir), exist_ok=True)
-    filename = f"{f'{prefix}_' if prefix else ''}{app_id}_{build_id}_report.{extension}"
+    filename = f"{f'{prefix}_' if prefix else ''}{app_id}_{build_id}_summary_report.{extension}"
     filepath = os.path.join(os.path.expanduser(output_dir), filename)
 
     with open(filepath, "wb") as f:
