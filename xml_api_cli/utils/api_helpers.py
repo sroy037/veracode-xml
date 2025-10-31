@@ -166,17 +166,16 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
     """
     Fetch issues for given app_id and latest build_id from Veracode Detailed Report (XML).
     """
-    if not app_id or not build_id:
-        raise ValueError("Both app_id and build_id must be provided")
-
     url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
-
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
     response.raise_for_status()
     root = ET.fromstring(response.text)
 
+    # Extract default namespace
+    ns = {"v": "https://www.veracode.com/schema/reports/export/1.0"}
+
     issues = []
-    for issue in root.findall(".//issue"):
+    for issue in root.findall(".//v:issue", ns):
         issues.append({
             "issueid": issue.get("issueid"),
             "title": issue.get("title"),
