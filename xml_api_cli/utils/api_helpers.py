@@ -153,14 +153,42 @@ def find_app_by_name(app_name: str, region: str = DEFAULT_REGION) -> str | None:
             matches.append({"app_id": app.attrib["app_id"], "app_name": name, "last_policy_update": policy_upd})
     return matches
 
-def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: str = DEFAULT_REGION) -> str | None:
-    """Call Veracode getmitigationinfo.do API and return XML root."""
+def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: str = DEFAULT_REGION) -> list[dict]:
+    """Fetch Mitigation for the provided Issue List."""
     import xml.etree.ElementTree as ET
     
     url = endpoint_mitigationreviewer(region) + f"?build_id={build_id}&flaw_id_list={issue_ids}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
 
-    return ET.fromstring(response.text)
+    root = ET.fromstring(response.text)
+
+    # Define namespace
+    ns = {"v": "https://analysiscenter.veracode.com/schema/mitigationinfo/1.0"}
+
+    mitigations_list = []
+
+    # Traverse <issue> elements
+    for issue in root.findall("v:issue", ns):
+        flaw_id = issue.attrib.get("flaw_id")
+        category = issue.attrib.get("category", "")
+        actions = []
+
+        for ma in issue.findall("v:mitigation_action", ns):
+            actions.append({
+                "action": ma.attrib.get("action"),
+                "desc": ma.attrib.get("desc"),
+                "reviewer": ma.attrib.get("reviewer"),
+                "date": ma.attrib.get("date"),
+                "comment": ma.attrib.get("comment")
+            })
+
+        mitigations_list.append({
+            "flaw_id": flaw_id,
+            "category": category,
+            "mitigations": actions
+        })
+
+    return mitigations_list
 
 def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION) -> list[dict]:
     """
