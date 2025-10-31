@@ -8,7 +8,8 @@ from xml_api_cli import config
 from xml_api_cli.utils.api_helpers import (
     find_app_by_name,
     get_latest_build_id,
-    call_veracode_xml_api,
+    fetch_mitigation_info,
+    select_issues_interactively,
     fetch_build_issues,
 )
 
