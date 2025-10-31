@@ -34,6 +34,12 @@ def setup_parser(parser):
         default=config.DEFAULT_REGION,
         help="API region to use (default: us)"
     )
+    parser.add_argument(
+        "-s", "--scan_type",
+        choices=["ss", "ds"],
+        default="ss",
+        help="Scan type (ss=Static, ds=Dynamic)"
+    )
 
 def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
     """
