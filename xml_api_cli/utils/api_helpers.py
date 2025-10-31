@@ -190,7 +190,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
 
                 issues.append({
                     "issueid": str(flaw.attrib.get("issueid")),  # force string
-                    "title": flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
+                    "title": str(flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
                     "severity": flaw.attrib.get("severity"),
                     "cweid": flaw.attrib.get("cweid"),
                     "module": flaw.attrib.get("module"),
