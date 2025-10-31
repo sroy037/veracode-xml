@@ -40,6 +40,11 @@ def setup_parser(parser):
         default="ss",
         help="Scan type (ss=Static, ds=Dynamic)"
     )
+    parser.add_argument(
+        "-S", "--severity",
+        choices=["5", "4", "3", "2", "1", "0"],
+        help="Severity Filter"
+    )
 
 def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
     """
@@ -107,7 +112,7 @@ def run(args):
             return
 
         # Let user select issues
-        issue_ids = select_issues_interactively(issues)
+        issue_ids = select_issues_interactively(issues, args.severity)
         if not issue_ids:
             print("⚠️  No issues selected. Exiting.")
             return
