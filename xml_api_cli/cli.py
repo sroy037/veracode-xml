@@ -30,7 +30,7 @@ def main():
     subparsers = parser.add_subparsers(
         title="Available Tasks",
         dest="task",
-        metavar="<task>"
+        metavar=" "
     )
 
     # Dynamically load each task module and set up its parser
