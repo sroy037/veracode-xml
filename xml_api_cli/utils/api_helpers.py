@@ -234,8 +234,8 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     """
     Display issues categorized by severity and let the user select which to fetch mitigation info for.
     If `severity` is provided, only issues of that severity are shown.
+    Issues are sorted by numeric issue_id for readability.
     """
-    # Map numeric levels to human-readable
     severity_map = {
         "5": "Very High",
         "4": "High",
@@ -246,18 +246,27 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     }
 
     # Categorize issues
-    categorized = {"Very High": [], "High": [], "Medium": [], "Low": [], "Very Low": [], "Info": []}
+    categorized = {label: [] for label in severity_map.values()}
+    categorized["Info"] = []  # ensure "Info" exists
+
     for issue in issues:
         sev_num = str(issue.get("severity", "0"))
         sev_label = severity_map.get(sev_num, "Info")
         categorized[sev_label].append(issue)
 
-    # If a severity filter is provided, only keep that category
-    severity_order = ["Very High", "High", "Medium", "Low", "Info"]
-    if severity:
-        severity_order = [severity] if severity in categorized else []
+    # Sort issues by numeric issue_id
+    for key in categorized:
+        categorized[key].sort(key=lambda i: int(i.get("issueid", "0")))
 
-    # Display issues by severity
+    # Determine which severities to show
+    severity_order = ["Very High", "High", "Medium", "Low", "Very Low", "Info"]
+    if severity:
+        if severity in categorized:
+            severity_order = [severity]
+        else:
+            print(f"⚠️ Invalid severity '{severity}'. Showing all severities instead.")
+    
+    # Display issues
     print("\n📌 Issues by Severity:")
     selectable = []
     idx = 1
@@ -276,16 +285,19 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         print("⚠️  No issues found for the selected severity.")
         return []
 
-    # Prompt user for selection
-    choices = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
-    selected_ids = []
-    for c in choices.split(","):
-        c = c.strip()
-        if c.isdigit() and 1 <= int(c) <= len(selectable):
-            selected_ids.append(selectable[int(c) - 1])
-
-    if not selected_ids:
+    # Interactive selection
+    selection = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
+    if not selection:
         print("⚠️  No issues selected. Exiting.")
+        return []
+
+    try:
+        selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
+        selected_ids = [selectable[i - 1] for i in selected_nums if 0 < i <= len(selectable)]
+    except Exception:
+        print("❌ Invalid selection. Please enter valid issue numbers.")
+        return []
+
     return selected_ids
 
 def save_output(content: str, args, task_name: str):
