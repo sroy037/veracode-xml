@@ -79,33 +79,18 @@ def run(args):
         app_id = args.app_id
         if not app_id and args.app_name:
             print(f"🔍 Resolving app_id for app_name='{args.app_name}' ...")
-            apps = find_app_id_by_name(args.app_name, args.region)
-            if not apps:
-                print(f"❌ No matching app found for name '{args.app_name}'. Exiting.")
-                return
-            if len(apps) == 1:
-                app_id = apps[0]["app_id"]
-                print(f"✅ Found application: {apps[0]['app_name']} (ID: {app_id})")
-            else:
-                print("\n⚠️  Multiple matches found:")
-                for i, app in enumerate(apps, 1):
-                    print(f"  [{i}] {app['app_name']} (ID: {app['app_id']})")
-                while True:
-                    choice = input("Enter the number of the application to use: ").strip()
-                    if choice.isdigit() and 1 <= int(choice) <= len(apps):
-                        app_id = apps[int(choice) - 1]["app_id"]
-                        print(f"✅ Selected: {apps[int(choice) - 1]['app_name']} (ID: {app_id})")
-                        break
-                    print("Invalid choice. Try again.")
+            app_id = find_app_id_by_name(args.app_name, args.region)
 
         if not app_id:
-            print("❌ No valid app_id provided or found. Exiting.")
+            print("❌ Please provide a valid app_id or app_name.")
             return
-
-        # Get latest build
-        build_id = get_latest_build_id(app_id)
+    
+        # Fetch build_id
+        print(f"Fetching latest build for app_id={app_id} (scan_type={args.scan_type or 'ss'}) ...")
+        build_id = get_latest_build_id(app_id, args.scan_type)
+    
         if not build_id:
-            print("⚠️  No recent builds found for this app. Exiting.")
+            print("❌ No valid build found for the specified scan type. Exiting.")
             return
         print(f"📦 Using latest build_id={build_id}")
 
