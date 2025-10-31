@@ -50,7 +50,7 @@ def run(args):
     app_id = args.app_id
     if not app_id and args.app_name:
         print(f"Resolving app_id for app_name='{args.app_name}' ...")
-        app_id = find_app_by_name(args.app_name)
+        app_id = find_app_id_by_name(args.app_name)
 
     if not app_id:
         print("❌ Please provide a valid app_id or app_name.")
