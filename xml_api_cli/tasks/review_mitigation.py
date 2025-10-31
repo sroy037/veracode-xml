@@ -119,7 +119,7 @@ def run(args):
 
     print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
     issue_ids_param = ",".join([str(i) for i in issue_ids])
-    root = fetch_mitigation_info(app_id, build_id, issue_ids_param, rargs.egion)
+    root = fetch_mitigation_info(app_id, build_id, issue_ids_param, args.region)
     print(root)
     mitigations = root.findall(".//mitigationinfo")
 
