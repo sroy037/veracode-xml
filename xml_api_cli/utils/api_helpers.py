@@ -189,8 +189,8 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                     continue
 
                 issues.append({
-                    "issueid": flaw.attrib.get("issueid"),
-                    "title": flaw.attrib.get("categoryname") or flaw.attrib.get("category"),
+                    "issueid": str(flaw.attrib.get("issueid")),  # force string
+                    "title" = flaw.attrib.get("categoryname") or flaw.attrib.get("category") or flaw.attrib.get("description", "(No Title)"),
                     "severity": flaw.attrib.get("severity"),
                     "cweid": flaw.attrib.get("cweid"),
                     "module": flaw.attrib.get("module"),
@@ -213,12 +213,12 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         "4": "High",
         "3": "Medium",
         "2": "Low",
-        "1": "Info",
+        "1": "Very Low",
         "0": "Info"
     }
 
     # Categorize issues
-    categorized = {"Very High": [], "High": [], "Medium": [], "Low": [], "Info": []}
+    categorized = {"Very High": [], "High": [], "Medium": [], "Low": [], "Very Low": [], "Info": []}
     for issue in issues:
         sev_num = str(issue.get("severity", "0"))
         sev_label = severity_map.get(sev_num, "Info")
