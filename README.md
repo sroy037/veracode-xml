@@ -8,7 +8,6 @@ A unified and modular **CLI tool** for interacting with the [Veracode XML APIs](
 fetch detailed reports, builds, and more — all secured with **HMAC authentication**.
 
 ---
-
 ## 🚀 Features
 - 🧱 Modular task-based design (e.g. `detailed_report`, `summary`, etc.)
 - 🔄 Supports both **Static (SS)** and **Dynamic (DS)** scan types
@@ -18,9 +17,7 @@ fetch detailed reports, builds, and more — all secured with **HMAC authenticat
 - 🧩 Clean structure and reusable modules
 
 ---
-
 ## ⚙️ Installation
-
 ```bash
 git clone https://github.com/sroy037/xml_api_cli.git
 cd xml_api_cli
@@ -29,12 +26,15 @@ pip install .
 ```
 
 ---
-
 ## 🧠 CLI Usage
 ```
 # General pattern
 xml_api_cli <task> [task-specific parameters]
+```
 
+---
+## 📘 Examples
+```
 # Example: Fetch detailed report for latest dynamic scan
 xml_api_cli detailed_report -n "Customer Portal" -f PDF -s ds
 
@@ -51,34 +51,23 @@ xml_api_cli build_info -n "Customer Portal" -s ds
 ```
 xml_api_cli detailed_report -h
 ```
+
 ---
 ## 🧩 Supported Tasks
 ```
-| Task                         | Meaning                                         |
-| ---------------------------- | ----------------------------------------------- |
-| 🧾 `detailed_report`         | Represents a generated detailed report/document |
-| 📋 `app_list`                | Listing all applications accessible to API ID   |
-| 🌍 `app_info`                | Represent application info for specific app     |
-| 📘 `build_list`              | Represents builds under application             |
-| 🧱 `build_info`              | Represents build info for specific build        |
-| ⚙️ `summary` *(coming soon)* | Scan summary/report                             |
-```
----
-
-## 📘 Examples
-```
-🔹 Get Static Scan Report (XML)
-
-xml_api_cli detailed_report -n "Core Banking App" -f XML -s ss
-
-🔸 Get Dynamic Scan Report (PDF)
-
-xml_api_cli detailed_report -n "Customer Portal" -f PDF -s ds \
-  -o ~/Downloads -p dyn_
+| Task                         | Description                                                  |
+| ---------------------------- | ------------------------------------------------------------ |
+| 🧰 `app_list`                | Listing all applications accessible to API ID                |
+| 🧾 `app_info`                | Fetch application info by app_id or app_name                 |
+| 📜 `build_list`              | List all builds under a specific application                 |
+| 🧩 `build_info`              | Fetch info for a specific or latest build                    |
+| 🧮 `detailed_report`         | Fetch detailed report (XML/PDF) for a specific app/build     |
+| 💬 `summary_report`          | Fetch summary report (XML/PDF) for a specific app/build      |
+| 🧠 `review_mitigation`       | Fetch mitigation information for issues                      |
+| ⚙️ `generate_flaw_report`    | Generate Flaw report for application list ⚠️ coming soon ⚠️   |
 ```
 
 ---
-
 ## 🔐 Authentication
 ```
 Store your Veracode HMAC credentials securely in:
@@ -92,7 +81,6 @@ veracode_api_key_secret = YOUR_KEY_SECRET
 Your credentials are automatically loaded using the Veracode Python HMAC library.
 
 ---
-
 ## 🧩 Adding New Tasks
 ```
 Each task lives inside the tasks/ folder and exposes a run(args) function.
@@ -107,7 +95,6 @@ xml_api_cli my_new_task
 ```
 
 ---
-
 ## 🧪 Development Setup
 ```
 # From project root
@@ -119,7 +106,6 @@ pip install -e .
 ```
 
 ---
-
 ## 🪪 License
 
 MIT License © 2025 Samab2024
