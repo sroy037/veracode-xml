@@ -10,7 +10,7 @@ SUPPORTED_TASKS = [
     "build_list",
     "build_info",
     "detailed_report",
-    "summary_report"
+    "summary_report",
     "mitigation_reviewer"
 ]
 
