@@ -6,6 +6,7 @@ import importlib
 
 # List all supported tasks (matching modules under tasks/)
 SUPPORTED_TASKS = [
+    "api_check",
     "app_list",
     "app_info",
     "build_list",
