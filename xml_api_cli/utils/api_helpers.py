@@ -202,34 +202,52 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                 })
     return issues
 
-def select_issues_interactively(issues):
-    """Display issues categorized by severity and let user select."""
-    severity_order = ["Very High", "High", "Medium", "Low", "Info"]
-    categorized = {sev: [] for sev in severity_order}
+def select_issues_interactively(issues: list[dict]) -> list[str]:
+    """
+    Display issues categorized by severity and let the user select which to fetch mitigation info for.
+    """
+    # Map numeric levels to human-readable
+    severity_map = {
+        "5": "Very High",
+        "4": "High",
+        "3": "Medium",
+        "2": "Low",
+        "1": "Info",
+        "0": "Info"
+    }
 
+    # Categorize issues
+    categorized = {"Very High": [], "High": [], "Medium": [], "Low": [], "Info": []}
     for issue in issues:
-        sev = issue.get("severity", "Info")
-        categorized.setdefault(sev, []).append(issue)
+        sev_num = str(issue.get("severity", "0"))
+        sev_label = severity_map.get(sev_num, "Info")
+        categorized[sev_label].append(issue)
 
+    # Display issues by severity
     print("\n📌 Issues by Severity:")
     selectable = []
     idx = 1
-    for sev in severity_order:
-        if categorized.get(sev):
-            print(f"\n=== {sev} ===")
-            for issue in categorized[sev]:
+    for sev_label in ["Very High", "High", "Medium", "Low", "Info"]:
+        if categorized[sev_label]:
+            print(f"\n=== {sev_label} ===")
+            for issue in categorized[sev_label]:
                 issue_id = issue.get("issueid")
                 title = issue.get("title") or "(No Title)"
-                print(f"  [{idx}] {issue_id} - {title}")
+                module = issue.get("module") or ""
+                print(f"  [{idx}] {issue_id} - {title} ({module})")
                 selectable.append(issue_id)
                 idx += 1
 
+    # Prompt user for selection
     choices = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
     selected_ids = []
     for c in choices.split(","):
         c = c.strip()
         if c.isdigit() and 1 <= int(c) <= len(selectable):
-            selected_ids.append(selectable[int(c)-1])
+            selected_ids.append(selectable[int(c) - 1])
+
+    if not selected_ids:
+        print("⚠️  No issues selected. Exiting.")
     return selected_ids
 
 def save_output(content: str, args, task_name: str):
