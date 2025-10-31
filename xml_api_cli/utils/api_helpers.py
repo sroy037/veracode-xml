@@ -10,6 +10,7 @@ from xml_api_cli.config import (
     endpoint_detailedreport_pdf,
     endpoint_summaryreport_xml,
     endpoint_summaryreport_pdf,
+    endpoint_mitigationreviewer_xml,
     DEFAULT_REGION,
 )
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
@@ -152,6 +153,70 @@ def find_app_by_name(app_name: str, region: str = DEFAULT_REGION) -> str | None:
             matches.append({"app_id": app.attrib["app_id"], "app_name": name, "last_policy_update": policy_upd})
     return matches
 
+def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: str = DEFAULT_REGION) -> str | None:
+    """Call Veracode getmitigationinfo.do API and return XML root."""
+    import xml.etree.ElementTree as ET
+    
+    url = endpoint_mitigationreviewer(region) + f"?build_id={build_id}&flaw_id_list={issue_ids}"
+    response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
+
+    return ET.fromstring(response.text)
+
+def fetch_build_issues(app_id: str, build_id: str, region=config.DEFAULT_REGION) -> list[dict]:
+    """
+    Fetch issues for given app_id and latest build_id from Veracode Detailed Report (XML).
+    """
+    if not app_id or not build_id:
+        raise ValueError("Both app_id and build_id must be provided")
+
+    url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
+
+    response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
+    response.raise_for_status()
+    root = ET.fromstring(response.text)
+
+    issues = []
+    for issue in root.findall(".//issue"):
+        issues.append({
+            "issueid": issue.get("issueid"),
+            "title": issue.get("title"),
+            "severity": issue.get("severity"),
+            "cweid": issue.get("cweid"),
+            "category": issue.get("category"),
+        })
+
+    return issues
+
+def select_issues_interactively(issues):
+    """Display issues categorized by severity and let user select."""
+    severity_order = ["Very High", "High", "Medium", "Low", "Info"]
+    categorized = {sev: [] for sev in severity_order}
+
+    for issue in issues:
+        sev = issue.get("severity", "Info")
+        categorized.setdefault(sev, []).append(issue)
+
+    print("\n📌 Issues by Severity:")
+    selectable = []
+    idx = 1
+    for sev in severity_order:
+        if categorized.get(sev):
+            print(f"\n=== {sev} ===")
+            for issue in categorized[sev]:
+                issue_id = issue.get("issueid")
+                title = issue.get("title") or "(No Title)"
+                print(f"  [{idx}] {issue_id} - {title}")
+                selectable.append(issue_id)
+                idx += 1
+
+    choices = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
+    selected_ids = []
+    for c in choices.split(","):
+        c = c.strip()
+        if c.isdigit() and 1 <= int(c) <= len(selectable):
+            selected_ids.append(selectable[int(c)-1])
+    return selected_ids
+
 def save_output(content: str, args, task_name: str):
     """
     Save API response content to a file.
@@ -172,7 +237,6 @@ def save_output(content: str, args, task_name: str):
 
     print(f"✅ Saved output to {file_path}")
     return file_path
-
 
 def pretty_print_xml(xml_string: str):
     """
