@@ -118,7 +118,9 @@ def run(args):
             return
 
     print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
-    root = fetch_mitigation_info(app_id=app_id, build_id=build_id, issue_ids=",".join(issue_ids), region=args.region)
+    issue_ids_param = ",".join([str(i) for i in selected_ids])
+    root = fetch_mitigation_info(app_id, build_id, issue_ids_param, rargs.egion)
+    print(root)
     mitigations = root.findall(".//mitigationinfo")
 
     if not mitigations:
