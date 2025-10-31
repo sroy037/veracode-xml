@@ -168,6 +168,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
     """
     url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
+    print(response.text)
     response.raise_for_status()
     root = ET.fromstring(response.text)
 
