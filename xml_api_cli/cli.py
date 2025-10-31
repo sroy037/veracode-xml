@@ -11,7 +11,7 @@ SUPPORTED_TASKS = [
     "build_info",
     "detailed_report",
     "summary_report",
-    "mitigation_reviewer"
+    "review_mitigation"
 ]
 
 def main():
