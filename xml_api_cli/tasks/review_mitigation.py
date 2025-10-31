@@ -35,6 +35,33 @@ def setup_parser(parser):
         help="API region to use (default: us)"
     )
 
+def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
+    """
+    Find an app_id given a full or partial app name.
+    Prompts the user if multiple matches are found.
+    """
+    apps = find_app_by_name(app_name, region)
+    if not apps:
+        return None
+
+    if len(apps) == 1:
+        app = apps[0]
+        print(f"✅ Found application: {app['app_name']}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
+        return app["app_id"]
+
+    # Multiple matches found
+    print("\n⚠️  Multiple matches found:")
+    for i, app in enumerate(apps, 1):
+        print(f"  [{i:<2}] {app['app_name']:<30}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
+
+    while True:
+        choice = input("Enter the number of the application you want to use: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(apps):
+            selected = apps[int(choice) - 1]
+            print(f"✅ Selected: {selected['app_name']} (ID: {selected['app_id']})")
+            return selected["app_id"]
+        print("Invalid choice. Please try again.")
+
 def run(args):
     print("📘 Task: Review Mitigation Information")
 
@@ -52,7 +79,7 @@ def run(args):
         app_id = args.app_id
         if not app_id and args.app_name:
             print(f"🔍 Resolving app_id for app_name='{args.app_name}' ...")
-            apps = find_app_by_name(args.app_name, args.region)
+            apps = find_app_id_by_name(args.app_name, args.region)
             if not apps:
                 print(f"❌ No matching app found for name '{args.app_name}'. Exiting.")
                 return
