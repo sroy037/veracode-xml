@@ -168,7 +168,6 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
     """
     url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
-    print(response.text)
     response.raise_for_status()
     root = ET.fromstring(response.text)
 
@@ -177,19 +176,30 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
 
     total_flaws = int(root.attrib.get("total_flaws", "0"))
     if total_flaws == 0:
-        return []  # no issues in this build
+        return []
 
     issues = []
-    for issue in root.findall(".//v:issue", ns):
-        # optionally skip third-party SCA issues here if they exist
-        issues.append({
-            "issueid": issue.get("issueid"),
-            "title": issue.get("title"),
-            "severity": issue.get("severity"),
-            "cweid": issue.get("cweid"),
-            "category": issue.get("category"),
-        })
+    # Traverse CWEs → staticflaws → flaw
+    for cwe in root.findall(".//v:cwe", ns):
+        for staticflaws in cwe.findall("v:staticflaws", ns):
+            for flaw in staticflaws.findall("v:flaw", ns):
+                # Optional: skip third-party SCA (they have type="software_composition_analysis")
+                flaw_type = flaw.attrib.get("type", "")
+                if flaw_type.lower() == "software_composition_analysis":
+                    continue
 
+                issues.append({
+                    "issueid": flaw.attrib.get("issueid"),
+                    "title": flaw.attrib.get("categoryname") or flaw.attrib.get("category"),
+                    "severity": flaw.attrib.get("severity"),
+                    "cweid": flaw.attrib.get("cweid"),
+                    "module": flaw.attrib.get("module"),
+                    "description": flaw.attrib.get("description"),
+                    "mitigation_status": flaw.attrib.get("mitigation_status"),
+                    "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
+                    "sourcefile": flaw.attrib.get("sourcefile"),
+                    "line": flaw.attrib.get("line"),
+                })
     return issues
 
 def select_issues_interactively(issues):
