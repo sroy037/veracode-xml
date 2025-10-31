@@ -22,7 +22,7 @@ def setup_parser(parser):
     )
     parser.add_argument(
         "-n", "--app_name",
-        help="Application name (partial or full match)"
+        help="Veracode App Name (required if --app_id not used)"
     )
     parser.add_argument(
         "-f", "--file",
@@ -31,8 +31,8 @@ def setup_parser(parser):
     parser.add_argument(
         "-r", "--region",
         choices=["us", "eu", "us_fed"],
-        default=config.DEFAULT_REGION,
-        help="API region to use (default: us)"
+        default="us",
+        help="Region for API requests"
     )
     parser.add_argument(
         "-s", "--scan_type",
