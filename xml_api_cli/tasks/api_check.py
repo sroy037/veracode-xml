@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from configparser import ConfigParser
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 
+HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials."
 
 def run(args=None):
     """
-    🔐 Validate Veracode API credentials from ~/.veracode/credentials.
+    Fetch [default] credentials and check API validity
     """
     cred_file = os.path.expanduser("~/.veracode/credentials")
 
