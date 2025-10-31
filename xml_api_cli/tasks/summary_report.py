@@ -67,5 +67,5 @@ def run(args):
     # Fetch report
     print(f"📄 Downloading {args.format} report for build_id={build_id} ...")
     os.makedirs(args.output_dir, exist_ok=True)
-    fetch_detailed_report(app_id, build_id, args.format, args.output_dir, args.prefix)
+    fetch_summary_report(app_id, build_id, args.format, args.output_dir, args.prefix)
     print("✅ Summary Report downloaded successfully.")
