@@ -1,0 +1,111 @@
+"""
+Fetch mitigation details for issues using Veracode XML API.
+Reference: https://docs.veracode.com/r/r_getmitigationinfo
+"""
+
+import os
+from xml_api_cli import config
+from xml_api_cli.utils.api_helpers import (
+    find_app_by_name,
+    get_latest_build_id,
+    call_veracode_xml_api,
+    fetch_build_issues,
+)
+
+HELP_TEXT = "Fetch mitigation information for issues."
+
+def setup_parser(parser):
+    parser.add_argument(
+        "-i", "--app_id",
+        help="Application ID (required if --app_name not provided)"
+    )
+    parser.add_argument(
+        "-n", "--app_name",
+        help="Application name (partial or full match)"
+    )
+    parser.add_argument(
+        "-f", "--file",
+        help="XML file containing issues (optional)"
+    )
+    parser.add_argument(
+        "-r", "--region",
+        choices=["us", "eu", "us_fed"],
+        default=config.DEFAULT_REGION,
+        help="API region to use (default: us)"
+    )
+
+def run(args):
+    print("📘 Task: Review Mitigation Information")
+
+    # If file is provided, parse issue IDs
+    if args.file:
+        if not os.path.exists(args.file):
+            print(f"❌ File '{args.file}' does not exist. Exiting.")
+            return
+        tree = ET.parse(args.file)
+        root = tree.getroot()
+        issue_ids = [elem.get("issue_id") for elem in root.findall(".//issue")]
+        print(f"📄 Loaded {len(issue_ids)} issue(s) from file '{args.file}'")
+    else:
+        # Resolve app_id if only app_name is provided
+        app_id = args.app_id
+        if not app_id and args.app_name:
+            print(f"🔍 Resolving app_id for app_name='{args.app_name}' ...")
+            apps = find_app_by_name(args.app_name, args.region)
+            if not apps:
+                print(f"❌ No matching app found for name '{args.app_name}'. Exiting.")
+                return
+            if len(apps) == 1:
+                app_id = apps[0]["app_id"]
+                print(f"✅ Found application: {apps[0]['app_name']} (ID: {app_id})")
+            else:
+                print("\n⚠️  Multiple matches found:")
+                for i, app in enumerate(apps, 1):
+                    print(f"  [{i}] {app['app_name']} (ID: {app['app_id']})")
+                while True:
+                    choice = input("Enter the number of the application to use: ").strip()
+                    if choice.isdigit() and 1 <= int(choice) <= len(apps):
+                        app_id = apps[int(choice) - 1]["app_id"]
+                        print(f"✅ Selected: {apps[int(choice) - 1]['app_name']} (ID: {app_id})")
+                        break
+                    print("Invalid choice. Try again.")
+
+        if not app_id:
+            print("❌ No valid app_id provided or found. Exiting.")
+            return
+
+        # Get latest build
+        build_id = get_latest_build_id(app_id)
+        if not build_id:
+            print("⚠️  No recent builds found for this app. Exiting.")
+            return
+        print(f"📦 Using latest build_id={build_id}")
+
+        # Fetch issues from build
+        issues = fetch_build_issues(app_id, build_id, args.region)
+        if not issues:
+            print("❌ No issues found in latest build. Exiting.")
+            return
+
+        # Let user select issues
+        issue_ids = select_issues_interactively(issues)
+        if not issue_ids:
+            print("⚠️  No issues selected. Exiting.")
+            return
+
+    print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
+    root = fetch_mitigation_info(app_id=app_id, build_id=build_id, issue_ids=",".join(issue_ids), region=args.region)
+    mitigations = root.findall(".//mitigationinfo")
+
+    if not mitigations:
+        print("❌ No mitigation details found for provided issue(s).")
+        return
+
+    print("\n✅ Mitigation Details:")
+    for m in mitigations:
+        issue_id = m.get("issue_id", "N/A")
+        status = m.get("status", "N/A")
+        date = m.get("date", "N/A")
+        comment = m.findtext("comment", "(No comment)")
+        reviewer = m.findtext("reviewer", "(N/A)")
+        print(f"• Issue: {issue_id}\n  Status: {status}\n  Date: {date}\n  Reviewer: {reviewer}\n  Comment: {comment}\n")
