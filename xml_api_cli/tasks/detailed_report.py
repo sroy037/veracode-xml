@@ -5,7 +5,7 @@ from xml_api_cli.utils.api_helpers import (
     fetch_detailed_report,
 )
 
-HELP_TEXT = "Fetch detailed report (XML/PDF) for a specific app/build."
+HELP_TEXT = "🧮 Fetch detailed report (XML/PDF) for a specific app/build."
 
 def setup_parser(parser):
     parser.add_argument("-i", "--app_id", help="Veracode App ID (required if --app_name not used)")
