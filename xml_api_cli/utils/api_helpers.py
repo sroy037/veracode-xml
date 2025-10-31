@@ -175,8 +175,13 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
     # Extract default namespace
     ns = {"v": "https://www.veracode.com/schema/reports/export/1.0"}
 
+    total_flaws = int(root.attrib.get("total_flaws", "0"))
+    if total_flaws == 0:
+        return []  # no issues in this build
+
     issues = []
     for issue in root.findall(".//v:issue", ns):
+        # optionally skip third-party SCA issues here if they exist
         issues.append({
             "issueid": issue.get("issueid"),
             "title": issue.get("title"),
