@@ -13,7 +13,7 @@ def setup_parser(parser):
     parser.add_argument("-f", "--format", choices=["XML", "PDF"], required=True, help="Report format")
     parser.add_argument("-s", "--scan_type", choices=["ss", "ds"], default="ss", help="Scan type (ss=Static, ds=Dynamic)")
     parser.add_argument("-r", "--region", choices=["us","eu","gov"], default="us", help="Region for API requests")
-    parser.add_argument("-o", "--output_dir", default=".", help="Directory to save report")
+    parser.add_argument("-o", "--output_dir", default=".", help="Directory to save report. Please provide absolute path for existing directory.")
     parser.add_argument("-p", "--prefix", help="Filename prefix")
 
 def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
