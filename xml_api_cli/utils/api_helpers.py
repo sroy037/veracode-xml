@@ -8,6 +8,8 @@ from xml_api_cli.config import (
     endpoint_getbuildinfo,
     endpoint_detailedreport_xml,
     endpoint_detailedreport_pdf,
+    endpoint_summaryreport_xml,
+    endpoint_summaryreport_pdf,
     DEFAULT_REGION,
 )
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
@@ -89,6 +91,28 @@ def fetch_detailed_report(app_id: str, build_id: str, format_type: str, output_d
         extension = "pdf"
     else:
         url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
+        extension = "xml"
+
+    resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
+    resp.raise_for_status()
+
+    os.makedirs(os.path.expanduser(output_dir), exist_ok=True)
+    filename = f"{prefix}{app_id}_{build_id}_report.{extension}"
+    filepath = os.path.join(os.path.expanduser(output_dir), filename)
+
+    with open(filepath, "wb") as f:
+        f.write(resp.content)
+
+    return filepath
+
+def fetch_summary_report(app_id: str, build_id: str, format_type: str, output_dir: str, prefix: str, region: str = DEFAULT_REGION) -> str | None:
+    """Download Summary report (XML or PDF) and save locally."""
+    format_type = format_type.upper()
+    if format_type == "PDF":
+        url = endpoint_summaryreport_pdf(region) + f"?build_id={build_id}&app_id={app_id}"
+        extension = "pdf"
+    else:
+        url = endpoint_summaryreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
         extension = "xml"
 
     resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
