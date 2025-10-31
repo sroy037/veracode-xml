@@ -4,6 +4,7 @@ Reference: https://docs.veracode.com/r/r_getmitigationinfo
 """
 
 import os
+import xml.etree.ElementTree as ET
 from xml_api_cli import config
 from xml_api_cli.utils.api_helpers import (
     find_app_by_name,
@@ -111,11 +112,11 @@ def run(args):
             print("❌ No issues found in latest build. Exiting.")
             return
 
-        # Let user select issues
-        issue_ids = select_issues_interactively(issues, args.severity)
-        if not issue_ids:
-            print("⚠️  No issues selected. Exiting.")
-            return
+    # Let user select issues
+    issue_ids = select_issues_interactively(issues, args.severity)
+    if not issue_ids:
+        print("⚠️  No issues selected. Exiting.")
+        return
 
     print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
     selected_ids = ",".join([str(i) for i in issue_ids])
