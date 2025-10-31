@@ -77,16 +77,24 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
 def run(args):
     print("📘 Task: Review Mitigation Information")
 
-    # If file is provided, parse issue IDs
     if args.file:
         if not os.path.exists(args.file):
             print(f"❌ File '{args.file}' does not exist. Exiting.")
             return
+    
         tree = ET.parse(args.file)
         root = tree.getroot()
-        print(root)
-        issues = [elem.get("issue_id") for elem in root.findall(".//issue")]
-        print(issues)
+    
+        # Detect namespace if present
+        ns = {"v": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {}
+    
+        # Find flaw elements (detailed report)
+        if ns:
+            flaw_elements = root.findall(".//v:flaw", ns)
+        else:
+            flaw_elements = root.findall(".//flaw")
+    
+        issues = [elem.get("issueid") for elem in flaw_elements if elem.get("issueid")]
         print(f"📄 Loaded {len(issues)} issue(s) from file '{args.file}'")
     else:
         # Resolve app_id if only app_name is provided
