@@ -10,7 +10,7 @@ from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.config import endpoint_getbuildlist, endpoint_getapplist
 from xml_api_cli.utils.api_helpers import find_app_by_name
 
-HELP_TEXT = "🧱 List all builds under a specific application."
+HELP_TEXT = "📜 List all builds under a specific application."
 
 def setup_parser(parser):
     parser.add_argument("-a", "--app_id", help="Veracode application ID (alternate to --app_name)")

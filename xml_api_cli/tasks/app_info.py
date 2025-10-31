@@ -12,7 +12,7 @@ from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.utils.api_helpers import find_app_by_name, pretty_print_xml
 from xml_api_cli.config import xml_api_v5_base
 
-HELP_TEXT = "Fetch detailed info for a specific Veracode application by app_id or app_name."
+HELP_TEXT = "🧾 Fetch detailed info for a specific Veracode application by app_id or app_name."
 
 def setup_parser(parser: argparse.ArgumentParser):
     """

@@ -8,7 +8,7 @@ import requests
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.config import endpoint_getapplist
 
-HELP_TEXT = "Fetch list of all applications in your Veracode account."
+HELP_TEXT = "🧰 Fetch list of all applications in your Veracode account."
 
 def setup_parser(parser):
     parser.add_argument(
