@@ -202,9 +202,10 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                 })
     return issues
 
-def select_issues_interactively(issues: list[dict]) -> list[str]:
+def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
     """
     Display issues categorized by severity and let the user select which to fetch mitigation info for.
+    If `severity` is provided, only issues of that severity are shown.
     """
     # Map numeric levels to human-readable
     severity_map = {
@@ -223,11 +224,16 @@ def select_issues_interactively(issues: list[dict]) -> list[str]:
         sev_label = severity_map.get(sev_num, "Info")
         categorized[sev_label].append(issue)
 
+    # If a severity filter is provided, only keep that category
+    severity_order = ["Very High", "High", "Medium", "Low", "Info"]
+    if severity:
+        severity_order = [severity] if severity in categorized else []
+
     # Display issues by severity
     print("\n📌 Issues by Severity:")
     selectable = []
     idx = 1
-    for sev_label in ["Very High", "High", "Medium", "Low", "Info"]:
+    for sev_label in severity_order:
         if categorized[sev_label]:
             print(f"\n=== {sev_label} ===")
             for issue in categorized[sev_label]:
@@ -237,6 +243,10 @@ def select_issues_interactively(issues: list[dict]) -> list[str]:
                 print(f"  [{idx}] {issue_id} - {title} ({module})")
                 selectable.append(issue_id)
                 idx += 1
+
+    if not selectable:
+        print("⚠️  No issues found for the selected severity.")
+        return []
 
     # Prompt user for selection
     choices = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
