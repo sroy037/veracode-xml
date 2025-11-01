@@ -257,7 +257,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                     "date_first_occurrence": flaw.get("date_first_occurrence"),
                     "url": flaw.get("url"),
                     "vuln_parameter": flaw.get("vuln_parameter"),
-                }
+                })
     return issues
 
 def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
