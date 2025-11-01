@@ -230,34 +230,36 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                 })
 
     # dynamicflaws → flaw
-    for cat in sev.findall(".//v:category", ns):
-        category_name = cat.get("categoryname")
-
-        for cwe in cat.findall(".//v:cwe", ns):
-            cwe_id = cwe.get("cweid")
-            cwe_name = cwe.get("cwename")
-
-            # handle dynamic flaws
-            for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
-                # Optional: skip third-party SCA (they have type="software_composition_analysis")
-                flaw_type = flaw.attrib.get("type", "")
-                if flaw_type.lower() == "software_composition_analysis":
-                    continue
-
-                issues.append({
-                    "issueid": str(flaw.attrib.get("issueid")),  # force string
-                    "title": str(flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
-                    "severity": flaw.get("severity", severity_level),
-                    "category": category_name,
-                    "cwe_id": cwe_id,
-                    "cwe_name": cwe_name,
-                    "description": flaw.get("description"),
-                    "remediation_status": flaw.get("remediation_status"),
-                    "mitigation_status": flaw.get("mitigation_status_desc"),
-                    "date_first_occurrence": flaw.get("date_first_occurrence"),
-                    "url": flaw.get("url"),
-                    "vuln_parameter": flaw.get("vuln_parameter"),
-                })
+    for sev in root.findall(".//v:severity", ns):
+        severity_level = sev.get("level")
+        
+        for cat in sev.findall(".//v:category", ns):
+            category_name = cat.get("categoryname")
+    
+            for cwe in cat.findall(".//v:cwe", ns):
+                cwe_id = cwe.get("cweid")
+                cwe_name = cwe.get("cwename")
+    
+                # handle dynamic flaws
+                for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
+                    # Optional: skip third-party SCA (they have type="software_composition_analysis")
+                    flaw_type = flaw.attrib.get("type", "")
+                    if flaw_type.lower() == "software_composition_analysis":
+                        continue
+    
+                    issues.append({
+                        "issue_id": flaw.get("issueid"),
+                        "severity": flaw.get("severity", severity_level),
+                        "category": category_name,
+                        "type": flaw.get("type"),
+                        "cwe_id": cwe_id,
+                        "cwe_name": cwe_name,
+                        "description": flaw.get("description"),
+                        "remediation_status": flaw.get("remediation_status"),
+                        "mitigation_status": flaw.get("mitigation_status_desc"),
+                        "date_first_occurrence": flaw.get("date_first_occurrence"),
+                        "vuln_parameter": flaw.get("vuln_parameter"),
+                    })
     return issues
 
 def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
