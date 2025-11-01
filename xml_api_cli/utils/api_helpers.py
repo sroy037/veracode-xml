@@ -228,6 +228,28 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                     "sourcefile": flaw.attrib.get("sourcefile"),
                     "line": flaw.attrib.get("line"),
                 })
+
+    # Traverse CWEs → dynamicflaws → flaw
+    for cwe in root.findall(".//v:cwe", ns):
+        for dynamicflaws in cwe.findall("v:dynamicflaws", ns):
+            for flaw in dynamicflaws.findall("v:flaw", ns):
+                # Optional: skip third-party SCA (they have type="software_composition_analysis")
+                flaw_type = flaw.attrib.get("type", "")
+                if flaw_type.lower() == "software_composition_analysis":
+                    continue
+
+                issues.append({
+                    "issueid": str(flaw.attrib.get("issueid")),  # force string
+                    "title": str(flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
+                    "severity": flaw.attrib.get("severity"),
+                    "cweid": flaw.attrib.get("cweid"),
+                    "module": flaw.attrib.get("module"),
+                    "description": flaw.attrib.get("description"),
+                    "mitigation_status": flaw.attrib.get("mitigation_status"),
+                    "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
+                    "sourcefile": flaw.attrib.get("sourcefile"),
+                    "line": flaw.attrib.get("line"),
+                })
     return issues
 
 def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
