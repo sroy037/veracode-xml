@@ -223,6 +223,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                     "cweid": flaw.attrib.get("cweid"),
                     "module": flaw.attrib.get("module"),
                     "description": flaw.attrib.get("description"),
+                    "remediation_status": flaw.get("remediation_status"),
                     "mitigation_status": flaw.attrib.get("mitigation_status"),
                     "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
                     "sourcefile": flaw.attrib.get("sourcefile"),
@@ -252,11 +253,12 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                         "severity": flaw.get("severity", severity_level),
                         "module": category_name,
                         "type": flaw.get("type"),
-                        "cwe_id": cwe_id,
+                        "cweid": cwe_id,
                         "cwe_name": cwe_name,
-                        "title": flaw.get("description"),
+                        "description": flaw.get("description"),
                         "remediation_status": flaw.get("remediation_status"),
-                        "mitigation_status": flaw.get("mitigation_status_desc"),
+                        "mitigation_status": flaw.attrib.get("mitigation_status"),
+                        "mitigation_status_desc": flaw.get("mitigation_status_desc"),
                         "date_first_occurrence": flaw.get("date_first_occurrence"),
                         "vuln_parameter": flaw.get("vuln_parameter"),
                     })
@@ -307,9 +309,11 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
             print(f"\n=== {sev_label} ===")
             for issue in categorized[sev_label]:
                 issue_id = issue.get("issueid")
-                title = issue.get("title") or "(No Title)"
-                module = issue.get("module") or ""
-                print(f"  [{idx}] {issue_id} - {title} ({module})")
+                module = issue.get("module") or "(No Module)"
+                cweid = issue.get("cweid")
+                mitigation_status = issue.get("mitigation_status") or "None"
+                remediation_status = issue.get("remediation_status") or "None"
+                print(f"  [{idx}] {issue_id} - {cweid} ({module} {mitigation_status} {remediation_status})")
                 selectable.append(issue_id)
                 idx += 1
 
