@@ -306,21 +306,21 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     idx = 1
     for sev_label in severity_order:
         if categorized[sev_label]:
-        # Header
-        print(f"\n=== {sev_label} ===")
-        print(f"{'':>4} {'Issue ID':<10} {'CWE-ID':<10} {'Module':<30} {'Mitigation Status':<20} {'Remediation Status':<20}")
-        
-        # Rows
-        for issue in categorized[sev_label]:
-            issue_id = issue.get("issueid")
-            module = issue.get("module") or "(No Module)"
-            cweid = issue.get("cweid")
-            mitigation_status = issue.get("mitigation_status") or "None"
-            remediation_status = issue.get("remediation_status") or "None"
-        
-            print(f"  [{idx:<2}] {issue_id:<10} CWE-{cweid:<6} {module:<30} {mitigation_status:<20} {remediation_status:<20}")
-            selectable.append(issue_id)
-            idx += 1
+            # Header
+            print(f"\n=== {sev_label} ===")
+            print(f"{'':>4} {'Issue ID':<10} {'CWE-ID':<10} {'Module':<30} {'Mitigation Status':<20} {'Remediation Status':<20}")
+            
+            # Rows
+            for issue in categorized[sev_label]:
+                issue_id = issue.get("issueid")
+                module = issue.get("module") or "(No Module)"
+                cweid = issue.get("cweid")
+                mitigation_status = issue.get("mitigation_status") or "None"
+                remediation_status = issue.get("remediation_status") or "None"
+            
+                print(f"  [{idx:<2}] {issue_id:<10} CWE-{cweid:<6} {module:<30} {mitigation_status:<20} {remediation_status:<20}")
+                selectable.append(issue_id)
+                idx += 1
 
     if not selectable:
         print("⚠️  No issues found for the selected severity.")
