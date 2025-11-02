@@ -43,7 +43,7 @@ def setup_parser(parser):
     )
     parser.add_argument(
         "-S", "--severity",
-        choices=["Very High", "High", "Medium", "Low", "Very Low", "Info"],
+        choices=["High & Above","High & Medium","Medium & Above","Medium & Below","All","Very High", "High", "Medium", "Low", "Very Low", "Info"],
         help="Severity Filter"
     )
 
@@ -111,11 +111,45 @@ def run(args):
                         "cweid": flaw.attrib.get("cweid"),
                         "module": flaw.attrib.get("module"),
                         "description": flaw.attrib.get("description"),
+                        "remediation_status": flaw.get("remediation_status"),
                         "mitigation_status": flaw.attrib.get("mitigation_status"),
                         "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
                         "sourcefile": flaw.attrib.get("sourcefile"),
                         "line": flaw.attrib.get("line"),
                     })
+
+        # Traverse dynamicflaws → flaw
+        for sev in root.findall(".//v:severity", ns):
+            severity_level = sev.get("level")
+            
+            for cat in sev.findall(".//v:category", ns):
+                category_name = cat.get("categoryname")
+        
+                for cwe in cat.findall(".//v:cwe", ns):
+                    cwe_id = cwe.get("cweid")
+                    cwe_name = cwe.get("cwename")
+        
+                    # handle dynamic flaws
+                    for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
+                        # Optional: skip third-party SCA (they have type="software_composition_analysis")
+                        flaw_type = flaw.attrib.get("type", "")
+                        if flaw_type.lower() == "software_composition_analysis":
+                            continue
+        
+                        issues.append({
+                            "issueid": flaw.get("issueid"),
+                            "severity": flaw.get("severity", severity_level),
+                            "module": category_name,
+                            "type": flaw.get("type"),
+                            "cweid": cwe_id,
+                            "cwe_name": cwe_name,
+                            "description": flaw.get("description"),
+                            "remediation_status": flaw.get("remediation_status"),
+                            "mitigation_status": flaw.attrib.get("mitigation_status"),
+                            "mitigation_status_desc": flaw.get("mitigation_status_desc"),
+                            "date_first_occurrence": flaw.get("date_first_occurrence"),
+                            "vuln_parameter": flaw.get("vuln_parameter"),
+                        })        
         print(f"📄 Loaded {len(issues)} issue(s) from file '{args.file}'")
     else:
         # Resolve app_id if only app_name is provided
