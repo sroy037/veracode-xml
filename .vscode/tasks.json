@@ -60,7 +60,7 @@
     {
       "label": "🧠 Review Mitigation Info",
       "type": "shell",
-      "command": "cmd_app=''; cmd_file=''; cmd_sev=''; if [ -n '${input:appName}' ]; then cmd_app=\"-n${input:appName}\"; fi; if [ -n '${input:file}' ]; then cmd_file=\"-f${input:file}\"; fi; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -z \"$cmd_app\" ] && [ -z \"$cmd_file\" ]; then echo 'Error: Either app_name or file must be provided.'; exit 1; fi; xml_api_cli review_mitigation $cmd_app $cmd_file $cmd_sev",
+      "command": "cmd_app=''; cmd_file=''; cmd_sev=''; cmd_scan=''; if [ -n '${input:appName}' ]; then cmd_app=\"-n${input:appName}\"; fi; if [ -n '${input:file}' ]; then cmd_file=\"-f${input:file}\"; fi; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -z \"$cmd_app\" ] && [ -z \"$cmd_file\" ]; then echo 'Error: Either app_name or file must be provided.'; exit 1; fi; xml_api_cli review_mitigation $cmd_app $cmd_file $cmd_sev $cmd_scan",
       "presentation": { "reveal": "always", "panel": "shared" },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
