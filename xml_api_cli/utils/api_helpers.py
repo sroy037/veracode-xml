@@ -337,24 +337,31 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         print("⚠️  No issues found for the selected severity.")
         return []
 
-    # Interactive selection
-    selection = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
-    if not selection:
-        print("⚠️  No issues selected. Exiting.")
-        return []
-
-    try:
-        selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
-        selected_ids = []
-        for i in selected_nums:
-            if 0 < i <= len(selectable):
-                selected_ids.append(selectable[i - 1])
-            else:
-                print(f"⚠️  Ignored invalid selection: {i}")
-    except Exception:
-        print("❌ Invalid selection. Please enter valid issue numbers.")
-        return []
-
+    # Interactive selection with retry on invalid input
+    while True:
+        selection = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
+        if not selection:
+            print("⚠️  No issues selected. Exiting.")
+            return []
+    
+        try:
+            selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
+            selected_ids = []
+            for i in selected_nums:
+                if 0 < i <= len(selectable):
+                    selected_ids.append(selectable[i - 1])
+                else:
+                    print(f"⚠️  Ignored invalid selection: {i}")
+    
+            if not selected_ids:
+                print("⚠️  No valid issues selected. Please try again.")
+                continue  # Re-prompt the user
+            break  # Exit loop when valid selection found
+    
+        except Exception:
+            print("❌ Invalid selection. Please enter valid issue numbers.")
+            continue  # Re-prompt the user
+    
     return selected_ids
 
 def save_output(content: str, args, task_name: str):
