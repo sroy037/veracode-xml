@@ -306,17 +306,21 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     idx = 1
     for sev_label in severity_order:
         if categorized[sev_label]:
-            print(f"\n=== {sev_label} ===")
-            print(f"      Issue ID -\t CWE-ID \t Module \t Mitigation Status \t Remediation Status")
-            for issue in categorized[sev_label]:
-                issue_id = issue.get("issueid")
-                module = issue.get("module") or "(No Module)"
-                cweid = issue.get("cweid")
-                mitigation_status = issue.get("mitigation_status") or "None"
-                remediation_status = issue.get("remediation_status") or "None"
-                print(f"  [{idx}] {issue_id} -\t CWE-{cweid} \t {module} \t {mitigation_status} \t {remediation_status}")
-                selectable.append(issue_id)
-                idx += 1
+        # Header
+        print(f"\n=== {sev_label} ===")
+        print(f"{'':>4} {'Issue ID':<10} {'CWE-ID':<10} {'Module':<30} {'Mitigation Status':<20} {'Remediation Status':<20}")
+        
+        # Rows
+        for issue in categorized[sev_label]:
+            issue_id = issue.get("issueid")
+            module = issue.get("module") or "(No Module)"
+            cweid = issue.get("cweid")
+            mitigation_status = issue.get("mitigation_status") or "None"
+            remediation_status = issue.get("remediation_status") or "None"
+        
+            print(f"  [{idx:<2}] {issue_id:<10} CWE-{cweid:<6} {module:<30} {mitigation_status:<20} {remediation_status:<20}")
+            selectable.append(issue_id)
+            idx += 1
 
     if not selectable:
         print("⚠️  No issues found for the selected severity.")
@@ -329,39 +333,18 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         return []
 
     try:
+        selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
         selected_ids = []
-        selected_parts = [x.strip() for x in selection.split(",") if x.strip()]
-    
-        for part in selected_parts:
-            # If numeric, check both index and issue_id possibilities
-            if part.isdigit():
-                num = int(part)
-    
-                # Case 1: Treat as list index
-                if 0 < num <= len(selectable):
-                    selected_ids.append(selectable[num - 1])
-                    continue
-    
-                # Case 2: Treat as issue ID (string match)
-                match = next((i for i in selectable if i == part), None)
-                if match:
-                    selected_ids.append(match)
-                    continue
-    
-            # Case 3: Non-numeric input — match directly (for any custom IDs)
-            match = next((i for i in selectable if i == part), None)
-            if match:
-                selected_ids.append(match)
-    
-        # Deduplicate (preserve order)
-        seen = set()
-        selected_ids = [x for x in selected_ids if not (x in seen or seen.add(x))]
-    
+        for i in selected_nums:
+            if 0 < i <= len(selectable):
+                selected_ids.append(selectable[i - 1])
+            else:
+                print(f"⚠️  Ignored invalid selection: {i}")
         if not selected_ids:
-            print("⚠️  No valid issues matched your selection.")
+            print("⚠️  No valid issues selected.")
             return []
     except Exception:
-        print("❌ Invalid selection. Please enter valid issue numbers or IDs.")
+        print("❌ Invalid selection. Please enter valid issue numbers.")
         return []
 
     return selected_ids
