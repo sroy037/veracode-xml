@@ -351,9 +351,6 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
                 selected_ids.append(selectable[i - 1])
             else:
                 print(f"⚠️  Ignored invalid selection: {i}")
-        if not selected_ids:
-            print("⚠️  No valid issues selected.")
-            return []
     except Exception:
         print("❌ Invalid selection. Please enter valid issue numbers.")
         return []
