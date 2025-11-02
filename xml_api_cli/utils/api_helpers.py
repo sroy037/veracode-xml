@@ -188,6 +188,17 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
             "mitigations": actions
         })
 
+    # Handle <error> nodes (e.g., flaws with no mitigation info)
+    for err in root.findall("v:error", ns):
+        if err.attrib.get("type") == "not_found":
+            missing_ids = err.attrib.get("flaw_id_list", "").split(",")
+            for fid in [x.strip() for x in missing_ids if x.strip()]:
+                mitigations_list.append({
+                    "flaw_id": fid,
+                    "category": "(Unknown — No mitigation info found)",
+                    "mitigations": []
+                })
+    
     return mitigations_list
 
 def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION) -> list[dict]:
