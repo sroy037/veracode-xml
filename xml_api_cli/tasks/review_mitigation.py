@@ -43,7 +43,7 @@ def setup_parser(parser):
     )
     parser.add_argument(
         "-S", "--severity",
-        choices=["Very High", "High", "Medium", "Low", "Very Low", "Info"],
+        choices=["High & Above","High & Medium","Medium & Above","Medium & Below","All","Very High", "High", "Medium", "Low", "Very Low", "Info"],
         help="Severity Filter"
     )
 
