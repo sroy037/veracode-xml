@@ -159,7 +159,7 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
     
     url = endpoint_mitigationreviewer(region) + f"?build_id={build_id}&flaw_id_list={issue_ids}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
-
+    print(response)
     root = ET.fromstring(response.text)
 
     # Define namespace
