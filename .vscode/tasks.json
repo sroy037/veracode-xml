@@ -107,7 +107,7 @@
       "id": "severity",
       "type": "pickString",
       "description": "Filter vulnerabilities by severity (optional)",
-      "options": ["Very High", "High", "Medium", "Low", "Very Low", "Info"],
+      "options": ["High & Above","High & Medium","Medium & Above","Medium & Below","All","Very High", "High", "Medium", "Low", "Very Low", "Info"],
       "default": ""
     },
     {
