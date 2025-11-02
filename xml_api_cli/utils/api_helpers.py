@@ -248,13 +248,13 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                         continue
     
                     issues.append({
-                        "issue_id": flaw.get("issueid"),
+                        "issueid": flaw.get("issueid"),
                         "severity": flaw.get("severity", severity_level),
-                        "category": category_name,
+                        "module": category_name,
                         "type": flaw.get("type"),
                         "cwe_id": cwe_id,
                         "cwe_name": cwe_name,
-                        "description": flaw.get("description"),
+                        "title": flaw.get("description"),
                         "remediation_status": flaw.get("remediation_status"),
                         "mitigation_status": flaw.get("mitigation_status_desc"),
                         "date_first_occurrence": flaw.get("date_first_occurrence"),
