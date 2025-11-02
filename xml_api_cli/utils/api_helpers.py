@@ -305,9 +305,21 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
 
     # Determine which severities to show
     severity_order = ["Very High", "High", "Medium", "Low", "Very Low", "Info"]
+    
     if severity:
-        if severity in categorized:
+        severity = severity.strip().title()
+        severity_map_groups = {
+            "High & Above": ["Very High", "High"],
+            "High & Medium": ["High", "Medium"],
+            "Medium & Above": ["Very High", "High", "Medium"],
+            "Medium & Below": ["Medium", "Low", "Very Low", "Info"],
+            "All": severity_order
+        }
+    
+        if severity in severity_order:
             severity_order = [severity]
+        elif severity in severity_map_groups:
+            severity_order = severity_map_groups[severity]
         else:
             print(f"⚠️ Invalid severity '{severity}'. Showing all severities instead.")
     
