@@ -408,3 +408,16 @@ def pretty_print_xml(xml_string: str):
     except Exception:
         # fallback if parsing fails
         print(xml_string)
+
+def get_veracode_api_url(region: str) -> str:
+    """
+    Return the correct Veracode REST base URL based on region.
+    """
+    region_map = {
+        "us": "https://api.veracode.com",
+        "eu": "https://api.veracode.eu",
+        "us_fed": "https://api.veracode.us-gov"
+    }
+
+    base_url = region_map.get(region.lower(), region_map["us"])
+    return f"{base_url}/api/authn/v2/api_credentials"
