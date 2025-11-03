@@ -4,8 +4,20 @@ import requests
 from datetime import datetime, timezone
 from configparser import ConfigParser
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
+from xml_api_cli.utils.api_helpers import get_veracode_api_url
 
 HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials."
+
+def setup_parser(parser: argparse.ArgumentParser):
+    """
+    Setup argparse for this task.
+    """
+    parser.add_argument(
+        "-r", "--region",
+        default="us",
+        choices=["us", "eu", "us_fed"],
+        help="Region for Veracode platform (default: us)."
+    )
 
 def run(args=None):
     """
@@ -32,8 +44,9 @@ def run(args=None):
         sys.exit(1)
 
     print("🔍 Validating Veracode credentials...")
+    print(f"📡 Using region: {args.region}")
 
-    url = "https://api.veracode.com/api/authn/v2/api_credentials"
+    url = get_veracode_api_url(args.region)
 
     try:
         resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
@@ -61,7 +74,7 @@ def run(args=None):
                 except Exception:
                     print("⚠️  Could not parse expiration timestamp.")
         elif resp.status_code == 401:
-            print("❌ Invalid credentials or expired keys.")
+            print("❌ Invalid credentials or expired keys or incorrect region.")
         else:
             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
     except requests.exceptions.RequestException as e:
