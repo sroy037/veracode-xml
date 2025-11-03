@@ -60,7 +60,7 @@
     {
       "label": "🧠 Review Mitigation Info",
       "type": "shell",
-      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_file=''; cmd_sev=''; cmd_scan=''; if [ -n '${input:file}' ]; then cmd_file=\"-f${input:file}\"; fi; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli review_mitigation --app_id \"$cmd_id\" $cmd_file $cmd_sev $cmd_scan; elif [ -n \"$cmd_name\" ]; then xml_api_cli review_mitigation --app_name \"$cmd_name\" $cmd_file $cmd_sev $cmd_scan; else echo 'Error: Either app_id or app_name must be provided.'; exit 1; fi",
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_file='${input:file}'; cmd_sev=''; cmd_scan=''; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli review_mitigation --app_id \"$cmd_id\" $cmd_sev $cmd_scan; elif [ -n \"$cmd_name\" ]; then xml_api_cli review_mitigation --app_name \"$cmd_name\" $cmd_sev $cmd_scan; elif [ -n \"$cmd_file\" ]; then xml_api_cli review_mitigation --file \"$cmd_file\" $cmd_sev; else echo 'Error: Either app_id or app_name or input_file must be provided.'; exit 1; fi",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
