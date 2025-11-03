@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timezone
 from configparser import ConfigParser
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
-from xml_api_cli.utils.api_helper import get_veracode_api_url
+from xml_api_cli.utils.api_helpers import get_veracode_api_url
 
 HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials."
 
