@@ -5,7 +5,7 @@
       "label": "🔐 Check API Credentials",
       "type": "shell",
       "command": "xml_api_cli api_check --region ${input:region}",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
@@ -13,64 +13,71 @@
       "label": "🧰 List Applications",
       "type": "shell",
       "command": "xml_api_cli app_list --region ${input:region}",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "🧾 Application Info",
       "type": "shell",
-      "command": "xml_api_cli app_info --app_name ${input:appName} --region ${input:region}",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_region='${input:region}'; if [ -n \"$cmd_id\" ]; then xml_api_cli app_info --app_id \"$cmd_id\" --region \"$cmd_region\"; else xml_api_cli app_info --app_name \"$cmd_name\" --region \"$cmd_region\"; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "📜 Build List",
       "type": "shell",
-      "command": "xml_api_cli build_list --app_name ${input:appName} --region ${input:region}",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_region='${input:region}'; if [ -n \"$cmd_id\" ]; then xml_api_cli build_list --app_id \"$cmd_id\" --region \"$cmd_region\"; else xml_api_cli build_list --app_name \"$cmd_name\" --region \"$cmd_region\"; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "🧩 Build Info",
       "type": "shell",
-      "command": "cmd_app='${input:appName}'; cmd_region='${input:region}'; cmd_build=''; cmd_scan=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; xml_api_cli build_info --app_name \"$cmd_app\" ${cmd_build:+$cmd_build} ${cmd_scan:+$cmd_scan} --region \"$cmd_region\"",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_region='${input:region}'; cmd_build=''; cmd_scan=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli build_info --app_id \"$cmd_id\" ${cmd_build:+$cmd_build} ${cmd_scan:+$cmd_scan} --region \"$cmd_region\"; else xml_api_cli build_info --app_name \"$cmd_name\" ${cmd_build:+$cmd_build} ${cmd_scan:+$cmd_scan} --region \"$cmd_region\"; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "🧮 Detailed Report",
       "type": "shell",
-      "command": "cmd_app='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; xml_api_cli detailed_report --app_name \"$cmd_app\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli detailed_report --app_id \"$cmd_id\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out; else xml_api_cli detailed_report --app_name \"$cmd_name\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "💬 Summary Report",
       "type": "shell",
-      "command": "cmd_app='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; xml_api_cli detailed_report --app_name \"$cmd_app\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; if [ -n '${input:buildId}' ]; then cmd_build=\"-b${input:buildId}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli summary_report --app_id \"$cmd_id\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out; else xml_api_cli summary_report --app_name \"$cmd_name\" -f\"$cmd_format\" $cmd_build $cmd_scan $cmd_region $cmd_prefix $cmd_out; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
     {
       "label": "🧠 Review Mitigation Info",
       "type": "shell",
-      "command": "cmd_app=''; cmd_file=''; cmd_sev=''; cmd_scan=''; if [ -n '${input:appName}' ]; then cmd_app=\"-n${input:appName}\"; fi; if [ -n '${input:file}' ]; then cmd_file=\"-f${input:file}\"; fi; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -z \"$cmd_app\" ] && [ -z \"$cmd_file\" ]; then echo 'Error: Either app_name or file must be provided.'; exit 1; fi; xml_api_cli review_mitigation $cmd_app $cmd_file $cmd_sev $cmd_scan",
-      "presentation": { "reveal": "always", "panel": "shared", "echo": false},
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_file=''; cmd_sev=''; cmd_scan=''; if [ -n '${input:file}' ]; then cmd_file=\"-f${input:file}\"; fi; if [ -n '${input:severity}' ]; then cmd_sev=\"-S${input:severity}\"; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli review_mitigation --app_id \"$cmd_id\" $cmd_file $cmd_sev $cmd_scan; elif [ -n \"$cmd_name\" ]; then xml_api_cli review_mitigation --app_name \"$cmd_name\" $cmd_file $cmd_sev $cmd_scan; else echo 'Error: Either app_id or app_name must be provided.'; exit 1; fi",
+      "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     }
   ],
   "inputs": [
     {
+      "id": "appId",
+      "type": "promptString",
+      "description": "Enter Application ID (optional)",
+      "default": ""
+    },
+    {
       "id": "appName",
       "type": "promptString",
-      "description": "Enter Application Name"
+      "description": "Enter Application Name (optional)",
+      "default": ""
     },
     {
       "id": "buildId",
@@ -88,7 +95,7 @@
     {
       "id": "format",
       "type": "pickString",
-      "description": "Select Report Format (required)",
+      "description": "Select Report Format",
       "options": ["XML", "PDF"],
       "default": "PDF"
     },
@@ -101,13 +108,13 @@
     {
       "id": "file",
       "type": "promptString",
-      "description": "Provide your existing Detailed XML Report (Optional - Fetch Latest report for App)"
+      "description": "Provide existing Detailed XML Report (optional)"
     },
     {
       "id": "severity",
       "type": "pickString",
       "description": "Filter vulnerabilities by severity (optional)",
-      "options": ["High & Above","High & Medium","Medium & Above","Medium & Below","All","Very High", "High", "Medium", "Low", "Very Low", "Info"],
+      "options": ["High & Above", "High & Medium", "Medium & Above", "Medium & Below", "All", "Very High", "High", "Medium", "Low", "Very Low", "Info"],
       "default": ""
     },
     {
