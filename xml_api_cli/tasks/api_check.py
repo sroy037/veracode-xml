@@ -44,6 +44,7 @@ def run(args=None):
         sys.exit(1)
 
     print("🔍 Validating Veracode credentials...")
+    print(f"📡 Using region: {args.region}")
 
     url = get_veracode_api_url(args.region)
 
@@ -73,7 +74,7 @@ def run(args=None):
                 except Exception:
                     print("⚠️  Could not parse expiration timestamp.")
         elif resp.status_code == 401:
-            print("❌ Invalid credentials or expired keys.")
+            print("❌ Invalid credentials or expired keys or incorrect region.")
         else:
             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
     except requests.exceptions.RequestException as e:
