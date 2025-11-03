@@ -4,7 +4,7 @@
     {
       "label": "🔐 Check API Credentials",
       "type": "shell",
-      "command": "xml_api_cli api_check",
+      "command": "xml_api_cli api_check --region ${input:region}",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false},
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
