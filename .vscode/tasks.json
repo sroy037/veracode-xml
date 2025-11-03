@@ -113,8 +113,8 @@
     {
       "id": "region",
       "type": "pickString",
-      "description": "Select region",
-      "options": ["us", "eu", "us-gov"],
+      "description": "Select region - us [Commercial], eu [European], us-fed [US Gov / FedRam]",
+      "options": ["us", "eu", "us-fed"],
       "default": "us"
     },
     {
