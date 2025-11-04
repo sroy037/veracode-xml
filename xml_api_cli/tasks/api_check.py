@@ -58,7 +58,7 @@ def run(args=None):
 
             print(f"\n✅ Credentials are valid!")
             print(f"🆔 API ID: {api_id}")
-            print(f"🧑‍🚀 User ID: {user_id}")
+            print(f"🧑‍ User ID: {user_id}")
             print(f"📅 Expiration: {exp_str}")
 
             # --- Calculate days until expiry ---
