@@ -188,46 +188,105 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
             "mitigations": actions
         })
 
+    # Handle <error> nodes (e.g., flaws with no mitigation info)
+    for err in root.findall("v:error", ns):
+        if err.attrib.get("type") == "not_found":
+            missing_ids = err.attrib.get("flaw_id_list", "").split(",")
+            for fid in [x.strip() for x in missing_ids if x.strip()]:
+                mitigations_list.append({
+                    "flaw_id": fid,
+                    "category": "(Unknown — No mitigation info found)",
+                    "mitigations": []
+                })
+    
     return mitigations_list
 
 def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION) -> list[dict]:
     """
-    Fetch issues for given app_id and latest build_id from Veracode Detailed Report (XML).
+    Fetch issues for a given Veracode application and build.
+    Returns a list of flaws (can be empty if no issues found).
     """
     url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
     response.raise_for_status()
-    root = ET.fromstring(response.text)
 
-    # Extract default namespace
+    xml_text = response.text.strip()
+    if not xml_text:
+        print("⚠️ Empty XML response received.")
+        return []
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        print(f"❌ Failed to parse XML: {e}")
+        return []
+
     ns = {"v": "https://www.veracode.com/schema/reports/export/1.0"}
 
+    # Check for zero flaws or missing attributes
     total_flaws = int(root.attrib.get("total_flaws", "0"))
-    if total_flaws == 0:
+    flaws_not_mitigated = int(root.attrib.get("flaws_not_mitigated", "0"))
+
+    if total_flaws == 0 or flaws_not_mitigated == 0:
+        print(f"✅ No flaws reported for build {build_id} (App ID: {app_id})")
         return []
 
     issues = []
-    # Traverse CWEs → staticflaws → flaw
+
+    # -------- STATIC FLAWS --------
     for cwe in root.findall(".//v:cwe", ns):
         for staticflaws in cwe.findall("v:staticflaws", ns):
             for flaw in staticflaws.findall("v:flaw", ns):
-                # Optional: skip third-party SCA (they have type="software_composition_analysis")
-                flaw_type = flaw.attrib.get("type", "")
-                if flaw_type.lower() == "software_composition_analysis":
+                if flaw.attrib.get("type", "").lower() == "software_composition_analysis":
                     continue
 
                 issues.append({
-                    "issueid": str(flaw.attrib.get("issueid")),  # force string
+                    "issueid": str(flaw.attrib.get("issueid")),
                     "title": str(flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
                     "severity": flaw.attrib.get("severity"),
                     "cweid": flaw.attrib.get("cweid"),
                     "module": flaw.attrib.get("module"),
                     "description": flaw.attrib.get("description"),
+                    "remediation_status": flaw.attrib.get("remediation_status"),
                     "mitigation_status": flaw.attrib.get("mitigation_status"),
                     "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
                     "sourcefile": flaw.attrib.get("sourcefile"),
                     "line": flaw.attrib.get("line"),
                 })
+
+    # -------- DYNAMIC FLAWS --------
+    for sev in root.findall(".//v:severity", ns):
+        severity_level = sev.get("level")
+        for cat in sev.findall(".//v:category", ns):
+            category_name = cat.get("categoryname")
+            for cwe in cat.findall(".//v:cwe", ns):
+                cwe_id = cwe.get("cweid")
+                cwe_name = cwe.get("cwename")
+
+                for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
+                    if flaw.attrib.get("type", "").lower() == "software_composition_analysis":
+                        continue
+
+                    issues.append({
+                        "issueid": flaw.get("issueid"),
+                        "severity": flaw.get("severity", severity_level),
+                        "module": category_name,
+                        "type": flaw.get("type"),
+                        "cweid": cwe_id,
+                        "cwe_name": cwe_name,
+                        "description": flaw.get("description"),
+                        "remediation_status": flaw.get("remediation_status"),
+                        "mitigation_status": flaw.attrib.get("mitigation_status"),
+                        "mitigation_status_desc": flaw.get("mitigation_status_desc"),
+                        "date_first_occurrence": flaw.get("date_first_occurrence"),
+                        "vuln_parameter": flaw.get("vuln_parameter"),
+                    })
+
+    if not issues:
+        print(f"✅ Build {build_id} has no actionable flaws in report.")
+    else:
+        print(f"🧾 Found {len(issues)} issues for build {build_id}.")
+
     return issues
 
 def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
@@ -260,9 +319,21 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
 
     # Determine which severities to show
     severity_order = ["Very High", "High", "Medium", "Low", "Very Low", "Info"]
+    
     if severity:
-        if severity in categorized:
+        severity = severity.strip().title()
+        severity_map_groups = {
+            "High & Above": ["Very High", "High"],
+            "High & Medium": ["High", "Medium"],
+            "Medium & Above": ["Very High", "High", "Medium"],
+            "Medium & Below": ["Medium", "Low", "Very Low", "Info"],
+            "All": severity_order
+        }
+    
+        if severity in severity_order:
             severity_order = [severity]
+        elif severity in severity_map_groups:
+            severity_order = severity_map_groups[severity]
         else:
             print(f"⚠️ Invalid severity '{severity}'. Showing all severities instead.")
     
@@ -272,12 +343,19 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     idx = 1
     for sev_label in severity_order:
         if categorized[sev_label]:
+            # Header
             print(f"\n=== {sev_label} ===")
+            print(f"{'':>4} {'Issue ID':<10} {'CWE-ID':<10} {'Module':<30} {'Mitigation Status':<20} {'Remediation Status':<20}")
+            
+            # Rows
             for issue in categorized[sev_label]:
                 issue_id = issue.get("issueid")
-                title = issue.get("title") or "(No Title)"
-                module = issue.get("module") or ""
-                print(f"  [{idx}] {issue_id} - {title} ({module})")
+                module = issue.get("module") or "(No Module)"
+                cweid = issue.get("cweid")
+                mitigation_status = issue.get("mitigation_status") or "None"
+                remediation_status = issue.get("remediation_status") or "None"
+            
+                print(f"  [{idx:<2}] {issue_id:<10} CWE-{cweid:<6} {module:<30} {mitigation_status:<20} {remediation_status:<20}")
                 selectable.append(issue_id)
                 idx += 1
 
@@ -285,19 +363,31 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         print("⚠️  No issues found for the selected severity.")
         return []
 
-    # Interactive selection
-    selection = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
-    if not selection:
-        print("⚠️  No issues selected. Exiting.")
-        return []
-
-    try:
-        selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
-        selected_ids = [selectable[i - 1] for i in selected_nums if 0 < i <= len(selectable)]
-    except Exception:
-        print("❌ Invalid selection. Please enter valid issue numbers.")
-        return []
-
+    # Interactive selection with retry on invalid input
+    while True:
+        selection = input("\nEnter numbers of issues to fetch mitigation info (comma-separated): ").strip()
+        if not selection:
+            print("⚠️  No issues selected. Exiting.")
+            return []
+    
+        try:
+            selected_nums = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
+            selected_ids = []
+            for i in selected_nums:
+                if 0 < i <= len(selectable):
+                    selected_ids.append(selectable[i - 1])
+                else:
+                    print(f"⚠️  Ignored invalid selection: {i}")
+    
+            if not selected_ids:
+                print("⚠️  No valid issues selected. Please try again.")
+                continue  # Re-prompt the user
+            break  # Exit loop when valid selection found
+    
+        except Exception:
+            print("❌ Invalid selection. Please enter valid issue numbers.")
+            continue  # Re-prompt the user
+    
     return selected_ids
 
 def save_output(content: str, args, task_name: str):
@@ -332,3 +422,16 @@ def pretty_print_xml(xml_string: str):
     except Exception:
         # fallback if parsing fails
         print(xml_string)
+
+def get_veracode_api_url(region: str) -> str:
+    """
+    Return the correct Veracode REST base URL based on region.
+    """
+    region_map = {
+        "us": "https://api.veracode.com",
+        "eu": "https://api.veracode.eu",
+        "us_fed": "https://api.veracode.us-gov"
+    }
+
+    base_url = region_map.get(region.lower(), region_map["us"])
+    return f"{base_url}/api/authn/v2/api_credentials"
