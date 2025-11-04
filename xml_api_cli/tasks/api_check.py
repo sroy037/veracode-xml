@@ -54,9 +54,11 @@ def run(args=None):
             data = resp.json()
             exp_str = data.get("expiration_ts")
             api_id = data.get("api_id")
+            user_id = data.get("user_id")
 
             print(f"\n✅ Credentials are valid!")
             print(f"🆔 API ID: {api_id}")
+            print(f"🧑‍🚀 User ID: {user_id}")
             print(f"📅 Expiration: {exp_str}")
 
             # --- Calculate days until expiry ---
