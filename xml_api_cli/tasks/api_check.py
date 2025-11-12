@@ -27,10 +27,10 @@ def setup_parser(parser: argparse.ArgumentParser):
 # ----------------------------------------------------------------------
 def list_all_users(region: str):
     """
-    Fetch all users and print them in tabular format.
+    Fetch all users and print them in tabular format with pagination.
     """
     base_url = "https://api.veracode.com/api/authn/v2/users"
-    params = {"size": 100, "page": 0}
+    params = {"size": 300, "page": 0}
     total_users = []
     print("📡 Fetching all users...")
 
@@ -47,13 +47,18 @@ def list_all_users(region: str):
                 break
             total_users.extend(users)
 
-            # Pagination check
+            # 🧾 Pagination info
             page_info = data.get("page", {})
             current_page = page_info.get("number", 0)
             total_pages = page_info.get("total_pages", 1)
-            if current_page + 1 >= total_pages:
+
+            print(f"📄 Processed page {current_page + 1}/{total_pages} ({len(users)} users)")
+
+            # Exit if this was the last page
+            if current_page >= total_pages - 1:
                 break
-            params["page"] += 1
+
+            params["page"] = current_page + 1  # move to next page
 
         # 🧮 Prepare table
         if not total_users:
@@ -71,7 +76,7 @@ def list_all_users(region: str):
             login_status = "✅" if u.get("login_enabled") else "❌"
             rows.append([status_icon, name, email, uid, uname, login_status])
 
-        # 🧱 Compute column widths
+        # 🧱 Compute column widths dynamically
         col_widths = [max(len(str(row[i])) for row in ([headers] + rows)) for i in range(len(headers))]
 
         # 🪶 Print table
@@ -81,7 +86,7 @@ def list_all_users(region: str):
         for row in rows:
             print(" | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(headers))))
 
-        print(f"\n✅ Retrieved total {len(total_users)} users.")
+        print(f"\n✅ Retrieved total {len(total_users)} users across {page_info.get('total_pages', 1)} page(s).")
 
     except requests.exceptions.RequestException as e:
         print(f"❌ Connection error: {e}")
@@ -157,3 +162,5 @@ def run(args=None):
     if args.user:
         if args.user.lower() == "all":
             list_all_users(args.region)
+        else:
+            get_user_details(args.user, args.region)
