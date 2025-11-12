@@ -21,18 +21,67 @@ def setup_parser(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "-u", "--user",
-        help="Fetch user details and API credentials by user ID (Admin only)."
+        default="all",
+        help="Fetch user details by user ID or 'all' for list (default: all). Admin only."
     )
 
 # ----------------------------------------------------------------------
-# 🧩 New Function: Fetch User Details (including API creds)
+# 🧩 Function: Fetch all users (paginated)
+# ----------------------------------------------------------------------
+def list_all_users(region: str):
+    """
+    Fetch all users with pagination support.
+    """
+    base_url = "https://api.veracode.com/api/authn/v2/users"
+    params = {"size": 100, "page": 0}
+    total_users = []
+    print("📡 Fetching all users...")
+
+    try:
+        while True:
+            resp = requests.get(base_url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            if resp.status_code != 200:
+                print(f"⚠️  Failed to fetch users (HTTP {resp.status_code}): {resp.text}")
+                break
+
+            data = resp.json()
+            users = data.get("_embedded", {}).get("users", [])
+            if not users:
+                break
+
+            total_users.extend(users)
+
+            # Pagination info
+            page_info = data.get("page", {})
+            current_page = page_info.get("number", 0)
+            total_pages = page_info.get("total_pages", 1)
+
+            for u in users:
+                status_icon = "🟢" if u.get("active") else "🔴"
+                login_icon = "🔑" if u.get("login_enabled") else "🚫"
+                print(f"\n{status_icon} {u.get('first_name', '')} {u.get('last_name', '')} "
+                      f"({u.get('email_address')})")
+                print(f"   🆔 User ID: {u.get('user_id')}")
+                print(f"   👤 Username: {u.get('user_name')}")
+                print(f"   {login_icon} Login Enabled: {u.get('login_enabled')}")
+                print(f"   🔗 Self Link: {u.get('_links', {}).get('self', {}).get('href')}")
+
+            if current_page + 1 >= total_pages:
+                break
+            params["page"] += 1
+
+        print(f"\n✅ Retrieved total {len(total_users)} users.")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Connection error: {e}")
+
+# ----------------------------------------------------------------------
+# 🧩 Function: Fetch specific user details
 # ----------------------------------------------------------------------
 def get_user_details(user_id: str, region: str):
     """
     Fetch detailed user info and API credentials from Veracode API.
     """
     base_url = "https://api.veracode.com/api/authn/v2"
-
     url = f"{base_url}/users/{user_id}"
     print(f"📡 Fetching user details for user_id: {user_id}")
 
@@ -102,8 +151,12 @@ def run(args=None):
     or fetch user details if --user is provided.
     """
     if args.user:
-        get_user_details(args.user, args.region)
-        return  # Skip default validation when user flag is used
+        if args.user.lower() == "all":
+            list_all_users(args.region)
+            return
+        else:
+            get_user_details(args.user, args.region)
+            return
 
     cred_file = os.path.expanduser("~/.veracode/credentials")
 
