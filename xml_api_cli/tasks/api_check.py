@@ -156,4 +156,4 @@ def get_user_details(user_id: str, region: str):
 def run(args=None):
     if args.user:
         if args.user.lower() == "all":
-            list_all_users(args.region
+            list_all_users(args.region)
