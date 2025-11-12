@@ -18,8 +18,7 @@ def setup_parser(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "-u", "--user",
-        default="all",
-        help="Fetch user details by user ID or 'all' for list (default: all). Admin only."
+        help="Fetch user details by user ID or 'all' for list (optional). Admin only."
     )
 
 # ----------------------------------------------------------------------
