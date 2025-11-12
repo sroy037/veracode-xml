@@ -60,7 +60,7 @@ def list_all_users(region: str):
             print("⚠️  No users found.")
             return
 
-        headers = ["Status", "Name", "Email", "User ID", "Username", "Login Enabled"]
+        headers = ["Active", "Name", "Email", "User ID", "Username", "Login Enabled"]
         rows = []
         for u in total_users:
             status_icon = "🟢" if u.get("active") else "🔴"
