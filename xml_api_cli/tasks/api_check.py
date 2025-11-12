@@ -31,10 +31,7 @@ def get_user_details(user_id: str, region: str):
     """
     Fetch detailed user info and API credentials from Veracode API.
     """
-    base_url = get_veracode_api_url(region)
-    # Force authn API base for this endpoint
-    if "api/authn/v2" not in base_url:
-        base_url = "https://api.veracode.com/api/authn/v2"
+    base_url = "https://api.veracode.com/api/authn/v2"
 
     url = f"{base_url}/users/{user_id}"
     print(f"📡 Fetching user details for user_id: {user_id}")
