@@ -7,7 +7,7 @@ from configparser import ConfigParser
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.utils.api_helpers import get_veracode_api_url
 
-HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials or fetch user-specific API keys."
+HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials or fetch detailed user information."
 
 def setup_parser(parser: argparse.ArgumentParser):
     """
@@ -21,51 +21,91 @@ def setup_parser(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "-u", "--user",
-        help="Fetch API credentials for a specific user ID (Admin only)."
+        help="Fetch user details and API credentials by user ID (Admin only)."
     )
 
 # ----------------------------------------------------------------------
-# 🧩 New Function: Fetch API creds by User ID
+# 🧩 New Function: Fetch User Details (including API creds)
 # ----------------------------------------------------------------------
-def get_user_api_creds(user_id: str, region: str):
+def get_user_details(user_id: str, region: str):
     """
-    Fetch API credentials for the given Veracode user ID.
+    Fetch detailed user info and API credentials from Veracode API.
     """
     base_url = get_veracode_api_url(region)
-    # Force base API root (authn API is not region-specific in helper)
+    # Force authn API base for this endpoint
     if "api/authn/v2" not in base_url:
         base_url = "https://api.veracode.com/api/authn/v2"
-    url = f"{base_url}/api_credentials/user_id/{user_id}"
 
-    print(f"📡 Fetching API credentials for user_id: {user_id}")
+    url = f"{base_url}/users/{user_id}"
+    print(f"📡 Fetching user details for user_id: {user_id}")
+
     try:
         resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            print("✅ User API credentials retrieved successfully:\n")
-            print(f"🆔 API ID: {data.get('api_id')}")
-            print(f"🔑 API Key Prefix: {data.get('api_key_prefix', 'N/A')}")
-            print(f"📅 Created: {data.get('creation_ts', 'Unknown')}")
-            print(f"📅 Expires: {data.get('expiration_ts', 'Unknown')}")
+
+            print("\n✅ User details retrieved successfully:\n")
+            print(f"👤 Name: {data.get('first_name', '')} {data.get('last_name', '')}")
+            print(f"📧 Email: {data.get('email_address')}")
+            print(f"🏢 Organization: {data.get('organization', {}).get('org_name', 'N/A')}")
+            print(f"🔑 Login Enabled: {data.get('login_enabled', False)}")
+            print(f"🟢 Active: {data.get('active', False)}")
+
+            # --- API Credentials Section ---
+            api_creds = data.get("api_credentials")
+            if not api_creds:
+                print("\n⚠️  API Credentials were never generated for this user.")
+            else:
+                print("\n🔐 API Credential Details:")
+                print(f"   🆔 API ID: {api_creds.get('api_id')}")
+                exp_ts = api_creds.get("expiration_ts")
+                print(f"   📅 Expiration: {exp_ts}")
+                try:
+                    exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    days_left = (exp_dt - datetime.now(timezone.utc)).days
+                    if days_left >= 0:
+                        print(f"   ⏳ Expires in: {days_left} day(s)")
+                    else:
+                        print(f"   ⚠️  Expired {-days_left} day(s) ago.")
+                except Exception:
+                    pass
+
+            # --- Teams Summary ---
+            teams = data.get("teams", [])
+            if teams:
+                print(f"\n👥 Teams ({len(teams)}):")
+                for t in teams:
+                    print(f"   • {t.get('team_name')} ({t.get('relationship', {}).get('display_name', '')})")
+
+            # --- Roles Summary ---
+            roles = data.get("roles", [])
+            if roles:
+                print(f"\n🧩 Roles ({len(roles)}):")
+                for r in roles:
+                    print(f"   • {r.get('role_description', r.get('role_name'))}")
+
+            print("\n✅ User information retrieved successfully.")
         elif resp.status_code == 403:
-            print("❌ Access denied. Admin privilege required to fetch user credentials.")
+            print("❌ Access denied. Admin privileges required to fetch user details.")
         elif resp.status_code == 404:
-            print("⚠️  User not found or does not have API credentials.")
+            print("⚠️  User not found.")
         else:
             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
+
     except requests.exceptions.RequestException as e:
         print(f"❌ Connection error: {e}")
 
 # ----------------------------------------------------------------------
-# 🎯 Main Function: Validate or delegate to user creds fetch
+# 🎯 Main Function: Validate default creds or fetch user info
 # ----------------------------------------------------------------------
 def run(args=None):
     """
     Fetch [default] credentials and check API validity,
-    or fetch user-specific credentials if --user is provided.
+    or fetch user details if --user is provided.
     """
     if args.user:
-        get_user_api_creds(args.user, args.region)
+        get_user_details(args.user, args.region)
         return  # Skip default validation when user flag is used
 
     cred_file = os.path.expanduser("~/.veracode/credentials")
