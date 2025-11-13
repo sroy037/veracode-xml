@@ -203,62 +203,70 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
 
 def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION) -> list[dict]:
     """
-    Fetch issues for given app_id and latest build_id from Veracode Detailed Report (XML).
+    Fetch issues for a given Veracode application and build.
+    Returns a list of flaws (can be empty if no issues found).
     """
     url = endpoint_detailedreport_xml(region) + f"?build_id={build_id}&app_id={app_id}"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
     response.raise_for_status()
-    root = ET.fromstring(response.text)
 
-    # Extract default namespace
+    xml_text = response.text.strip()
+    if not xml_text:
+        print("⚠️ Empty XML response received.")
+        return []
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        print(f"❌ Failed to parse XML: {e}")
+        return []
+
     ns = {"v": "https://www.veracode.com/schema/reports/export/1.0"}
 
+    # Check for zero flaws or missing attributes
     total_flaws = int(root.attrib.get("total_flaws", "0"))
-    if total_flaws == 0:
+    flaws_not_mitigated = int(root.attrib.get("flaws_not_mitigated", "0"))
+
+    if total_flaws == 0 or flaws_not_mitigated == 0:
+        print(f"✅ No flaws reported for build {build_id} (App ID: {app_id})")
         return []
 
     issues = []
-    # staticflaws → flaw
+
+    # -------- STATIC FLAWS --------
     for cwe in root.findall(".//v:cwe", ns):
         for staticflaws in cwe.findall("v:staticflaws", ns):
             for flaw in staticflaws.findall("v:flaw", ns):
-                # Optional: skip third-party SCA (they have type="software_composition_analysis")
-                flaw_type = flaw.attrib.get("type", "")
-                if flaw_type.lower() == "software_composition_analysis":
+                if flaw.attrib.get("type", "").lower() == "software_composition_analysis":
                     continue
 
                 issues.append({
-                    "issueid": str(flaw.attrib.get("issueid")),  # force string
+                    "issueid": str(flaw.attrib.get("issueid")),
                     "title": str(flaw.attrib.get("categoryname") or flaw.attrib.get("category")),
                     "severity": flaw.attrib.get("severity"),
                     "cweid": flaw.attrib.get("cweid"),
                     "module": flaw.attrib.get("module"),
                     "description": flaw.attrib.get("description"),
-                    "remediation_status": flaw.get("remediation_status"),
+                    "remediation_status": flaw.attrib.get("remediation_status"),
                     "mitigation_status": flaw.attrib.get("mitigation_status"),
                     "mitigation_status_desc": flaw.attrib.get("mitigation_status_desc"),
                     "sourcefile": flaw.attrib.get("sourcefile"),
                     "line": flaw.attrib.get("line"),
                 })
 
-    # dynamicflaws → flaw
+    # -------- DYNAMIC FLAWS --------
     for sev in root.findall(".//v:severity", ns):
         severity_level = sev.get("level")
-        
         for cat in sev.findall(".//v:category", ns):
             category_name = cat.get("categoryname")
-    
             for cwe in cat.findall(".//v:cwe", ns):
                 cwe_id = cwe.get("cweid")
                 cwe_name = cwe.get("cwename")
-    
-                # handle dynamic flaws
+
                 for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
-                    # Optional: skip third-party SCA (they have type="software_composition_analysis")
-                    flaw_type = flaw.attrib.get("type", "")
-                    if flaw_type.lower() == "software_composition_analysis":
+                    if flaw.attrib.get("type", "").lower() == "software_composition_analysis":
                         continue
-    
+
                     issues.append({
                         "issueid": flaw.get("issueid"),
                         "severity": flaw.get("severity", severity_level),
@@ -273,6 +281,12 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                         "date_first_occurrence": flaw.get("date_first_occurrence"),
                         "vuln_parameter": flaw.get("vuln_parameter"),
                     })
+
+    if not issues:
+        print(f"✅ Build {build_id} has no actionable flaws in report.")
+    else:
+        print(f"🧾 Found {len(issues)} issues for build {build_id}.")
+
     return issues
 
 def select_issues_interactively(issues: list[dict], severity: str | None = None) -> list[str]:
