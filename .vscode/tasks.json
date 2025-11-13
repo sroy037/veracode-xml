@@ -4,7 +4,7 @@
     {
       "label": "🔐 Check API Credentials",
       "type": "shell",
-      "command": "xml_api_cli api_check --region ${input:region}",
+      "command": "cmd_region='${input:region}'; cmd_user='${input:apiUser}'; if [ -n \"$cmd_user\" ]; then xml_api_cli api_check --region \"$cmd_region\" -u \"$cmd_user\"; else xml_api_cli api_check --region \"$cmd_region\"; fi",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
@@ -12,7 +12,7 @@
     {
       "label": "🧰 List Applications",
       "type": "shell",
-      "command": "xml_api_cli app_list --region ${input:region}",
+      "command": "cmd_region='${input:region}'; cmd_type='${input:apiType}'; if [ -n \"$cmd_type\" ]; then xml_api_cli app_list --region \"$cmd_region\" -t \"$cmd_type\"; else xml_api_cli app_list --region \"$cmd_region\"; fi",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
@@ -20,7 +20,7 @@
     {
       "label": "🧾 Application Info",
       "type": "shell",
-      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_region='${input:region}'; if [ -n \"$cmd_id\" ]; then xml_api_cli app_info --app_id \"$cmd_id\" --region \"$cmd_region\"; else xml_api_cli app_info --app_name \"$cmd_name\" --region \"$cmd_region\"; fi",
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_region='${input:region}'; cmd_type='${input:apiType}'; if [ \"$cmd_type\" = 'REST' ]; then xml_api_cli app_info --app_name \"$cmd_name\" --region \"$cmd_region\" -t \"$cmd_type\"; else if [ -n \"$cmd_id\" ]; then xml_api_cli app_info --app_id \"$cmd_id\" --region \"$cmd_region\" -t \"$cmd_type\"; else xml_api_cli app_info --app_name \"$cmd_name\" --region \"$cmd_region\" -t \"$cmd_type\"; fi; fi",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
@@ -52,7 +52,7 @@
     {
       "label": "💬 Summary Report",
       "type": "shell",
-      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; fi; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli summary_report --app_id \"$cmd_id\" -f\"$cmd_format\" $cmd_scan $cmd_region $cmd_prefix $cmd_out; else xml_api_cli summary_report --app_name \"$cmd_name\" -f\"$cmd_format\" $cmd_scan $cmd_region $cmd_prefix $cmd_out; fi",
+      "command": "cmd_id='${input:appId}'; cmd_name='${input:appName}'; cmd_format='${input:format}'; cmd_build=''; cmd_scan=''; cmd_region=''; cmd_prefix=''; cmd_out=''; if [ -n '${input:scanType}' ]; then cmd_scan=\"-s${input:scanType}\"; fi; if [ -n '${input:region}' ]; then cmd_region=\"-r${input:region}\"; fi; if [ -n '${input:prefix}' ]; then cmd_prefix=\"-p${input:prefix}\"; fi; if [ -n '${input:outDir}' ]; then cmd_out=\"-o${input:outDir}\"; fi; if [ -n \"$cmd_id\" ]; then xml_api_cli summary_report --app_id \"$cmd_id\" -f\"$cmd_format\" $cmd_scan $cmd_region $cmd_prefix $cmd_out; else xml_api_cli summary_report --app_name \"$cmd_name\" -f\"$cmd_format\" $cmd_scan $cmd_region $cmd_prefix $cmd_out; fi",
       "presentation": { "reveal": "always", "panel": "shared", "echo": false },
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
@@ -68,6 +68,12 @@
   ],
   "inputs": [
     {
+      "id": "apiUser",
+      "type": "promptString",
+      "description": "Enter username filter for API Check (-u option, optional)",
+      "default": ""
+    },
+    {
       "id": "appId",
       "type": "promptString",
       "description": "Enter Application ID (optional)",
@@ -78,6 +84,13 @@
       "type": "promptString",
       "description": "Enter Application Name (optional)",
       "default": ""
+    },
+    {
+      "id": "apiType",
+      "type": "pickString",
+      "description": "Select API Type (default XML)",
+      "options": ["XML", "REST"],
+      "default": "XML"
     },
     {
       "id": "buildId",
