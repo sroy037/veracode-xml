@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from configparser import ConfigParser
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.utils.api_helpers import get_veracode_api_url
+from xml_api_cli.config import api_base_rest
 
 HELP_TEXT = "🔐 Validate Veracode API credentials from ~/.veracode/credentials or fetch detailed user information."
 
@@ -28,14 +29,15 @@ def list_all_users(region: str):
     """
     Fetch all users and print them in tabular format with pagination.
     """
-    base_url = "https://api.veracode.com/api/authn/v2/users"
+    base_url = api_base_rest(region).rstrip("/")
+    url = f"{base_url}/api/authn/v2/users"
     params = {"size": 300, "page": 0}
     total_users = []
     print("📡 Fetching all users...")
 
     try:
         while True:
-            resp = requests.get(base_url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
             if resp.status_code != 200:
                 print(f"⚠️  Failed to fetch users (HTTP {resp.status_code}): {resp.text}")
                 break
@@ -97,7 +99,7 @@ def get_user_details(user_id: str, region: str):
     """
     Fetch detailed user info and API credentials from Veracode API.
     """
-    base_url = "https://api.veracode.com/api/authn/v2"
+    base_url = api_base_rest(region).rstrip("/")
     url = f"{base_url}/users/{user_id}"
     print(f"📡 Fetching user details for user_id: {user_id}")
 
