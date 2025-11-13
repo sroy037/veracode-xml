@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="veracli",
+    name="xml_api_cli",
     version="1.0.0",
     description="Unified CLI for Veracode API tasks.",
     author="Soumik Roy",
@@ -12,7 +12,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "veracli=xml_api_cli.cli:main",
+            "xml_api_cli=xml_api_cli.cli:main",
         ],
     },
     python_requires=">=3.8",
