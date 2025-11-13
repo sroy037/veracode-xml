@@ -1,32 +1,22 @@
-"""
-Fetch information for a specific application.
-Reference: https://docs.veracode.com/r/r_getappinfo
-"""
-
 import argparse
 import sys
-import os
 import requests
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.utils.api_helpers import find_app_by_name, pretty_print_xml
-from xml_api_cli.config import xml_api_v5_base
+from xml_api_cli.config import xml_api_v5_base, api_base_rest
 
-HELP_TEXT = "🧾 Fetch detailed info for a specific Veracode application by app_id or app_name."
+HELP_TEXT = "🧾 Fetch detailed info for a specific Veracode application by app_id or app_name (XML or REST)."
 
+# ----------------------------------------------------------------------
+# Parser Setup
+# ----------------------------------------------------------------------
 def setup_parser(parser: argparse.ArgumentParser):
-    """
-    Setup argparse for this task. Either --app_id or --app_name must be provided.
-    """
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "-a", "--app_id",
-        help="Application ID (integer). Alternate to --app_name. Example: 2477056"
-    )
-    group.add_argument(
-        "-n", "--app_name",
-        help="Veracode application name. Alternate to --app_id. Example: verademo"
-    )
+    group.add_argument("-a", "--app_id", help="Application ID (integer). Example: 2477056")
+    group.add_argument("-n", "--app_name", help="Veracode application name. Example: verademo")
+
     parser.add_argument(
         "-r", "--region",
         default="us",
@@ -34,92 +24,176 @@ def setup_parser(parser: argparse.ArgumentParser):
         help="Region for Veracode platform (default: us)."
     )
     parser.add_argument(
+        "-t", "--api_type",
+        default="XML",
+        choices=["XML", "REST"],
+        help="API type to use (default: XML)."
+    )
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
-        help="Print full XML response."
+        help="Print full XML/JSON response."
     )
 
-def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
+# ----------------------------------------------------------------------
+# REST API Helper
+# ----------------------------------------------------------------------
+def find_app_rest_by_name(app_name: str, region: str = "us"):
     """
-    Find an app_id given a full or partial app name.
-    Prompts the user if multiple matches are found.
+    Search apps by name using REST API (partial match supported).
+    Returns list of matching apps.
     """
-    apps = find_app_by_name(app_name, region)
-    if not apps:
-        return None
+    base_url = api_base_rest(region).rstrip("/")
+    url = f"{base_url}/appsec/v1/applications/?name={app_name}"
 
-    if len(apps) == 1:
-        app = apps[0]
-        print(f"✅ Found application: {app['app_name']}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
-        return app["app_id"]
+    resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+    if resp.status_code != 200:
+        print(f"❌ Failed to fetch applications (HTTP {resp.status_code}): {resp.text}")
+        return []
 
-    # Multiple matches found
-    print("\n⚠️  Multiple matches found:")
-    for i, app in enumerate(apps, 1):
-        print(f"  [{i:<2}] {app['app_name']:<30}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
+    data = resp.json()
+    apps = data.get("_embedded", {}).get("applications", [])
+    results = []
 
-    while True:
-        choice = input("Enter the number of the application you want to use: ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(apps):
-            selected = apps[int(choice) - 1]
-            print(f"✅ Selected: {selected['app_name']} (ID: {selected['app_id']})")
-            return selected["app_id"]
-        print("Invalid choice. Please try again.")
+    for app in apps:
+        profile = app.get("profile", {})
+        results.append({
+            "id": app.get("id"),
+            "guid": app.get("guid"),
+            "name": profile.get("name"),
+            "policy": (profile.get("policies") or [{}])[0].get("name", "-"),
+            "business_unit": profile.get("business_unit", {}).get("name", "-"),
+            "last_scan": app.get("last_completed_scan_date", "-"),
+            "criticality": profile.get("business_criticality", "-"),
+        })
+    return results
 
+# ----------------------------------------------------------------------
+# Display REST App Details
+# ----------------------------------------------------------------------
+def show_rest_app_details(app, verbose=False):
+    """
+    Print application details from REST API.
+    """
+    profile = app.get("profile", {})
+    print("\n✅ Application Info (REST):")
+    print(f"  ID:                 {app.get('id')}")
+    print(f"  GUID:               {app.get('guid')}")
+    print(f"  Name:               {profile.get('name')}")
+    print(f"  Business Unit:      {profile.get('business_unit', {}).get('name', '-')}")
+    print(f"  Business Criticality: {profile.get('business_criticality', '-')}")
+    print(f"  Last Modified:      {app.get('modified')}")
+    print(f"  Last Scan:          {app.get('last_completed_scan_date', '-')}")
+    print(f"  Policy:             {(profile.get('policies') or [{}])[0].get('name', '-')}")
+    print(f"  Policy Status:      {(profile.get('policies') or [{}])[0].get('policy_compliance_status', '-')}")
+    print(f"  Policy Check Date:  {app.get('last_policy_compliance_check_date')}")
+    print(f"  Created:            {app.get('created')}")
+    print(f"  Results URL:        {app.get('results_url', '-')}")
+
+    if verbose:
+        import json
+        print("\n--- Full JSON Response ---")
+        print(json.dumps(app, indent=2))
+
+# ----------------------------------------------------------------------
+# XML Logic
+# ----------------------------------------------------------------------
+def fetch_app_info_xml(app_id: str, region: str, verbose=False):
+    print(f"📡 Fetching app info for app_id={app_id} (XML)...")
+    url = xml_api_v5_base(region) + "getappinfo.do"
+    resp = requests.get(url, params={"app_id": app_id}, auth=RequestsAuthPluginVeracodeHMAC())
+    if resp.status_code != 200:
+        print(f"❌ Failed to fetch app info ({resp.status_code}): {resp.text}")
+        sys.exit(1)
+
+    if verbose:
+        pretty_print_xml(resp.text)
+
+    ns = {"ns": "https://analysiscenter.veracode.com/schema/2.0/appinfo"}
+    root = ET.fromstring(resp.text)
+    app_elem = root.find("ns:application", ns)
+    if app_elem is None:
+        print("⚠️  No <application> element found.")
+        return
+
+    print("\n✅ Application Info (XML):")
+    for key in ["app_id", "app_name", "business_criticality", "policy", "policy_updated_date",
+                "teams", "business_unit", "modified_date"]:
+        print(f"  {key:22}: {app_elem.attrib.get(key, '-')}")
+
+# ----------------------------------------------------------------------
+# Main Run
+# ----------------------------------------------------------------------
 def run(args):
-    """
-    Run the app_info task.
-    Resolves app_id from app_name if necessary, fetches XML, prints and saves.
-    """
     try:
-        # Resolve app_id from app_name if needed
-        if not args.app_id and args.app_name:
-            print(f"🔍 Searching for application matching name: '{args.app_name}' ...")
-            app_id = find_app_id_by_name(args.app_name, args.region)
-            if not app_id:
-                print("❌ No matching applications found.")
+        # REST Mode
+        if args.api_type == "REST":
+            if not args.app_name:
+                print("❌ REST API requires --app_name (search by name).")
                 sys.exit(1)
-            args.app_id = app_id
+
+            print(f"📡 Searching applications matching '{args.app_name}' via REST API...")
+            matches = find_app_rest_by_name(args.app_name, args.region)
+
+            if not matches:
+                print("❌ No applications found.")
+                sys.exit(1)
+
+            if len(matches) == 1:
+                guid = matches[0]["guid"]
+            else:
+                print("\n⚠️ Multiple matches found:")
+                for i, app in enumerate(matches, 1):
+                    last_scan = app.get("last_scan", "-")
+                    print(f"  [{i}] {app['name']:<35}  (ID: {app['id']})  Last Scan: {last_scan}")
+                while True:
+                    choice = input("Enter the number of the app to view details: ").strip()
+                    if choice.isdigit() and 1 <= int(choice) <= len(matches):
+                        guid = matches[int(choice) - 1]["guid"]
+                        break
+                    print("Invalid selection. Try again.")
+
+            # Fetch exact app details
+            base_url = api_base_rest(args.region).rstrip("/")
+            detail_url = f"{base_url}/appsec/v1/applications/{guid}"
+            resp = requests.get(detail_url, auth=RequestsAuthPluginVeracodeHMAC())
+            if resp.status_code == 200:
+                show_rest_app_details(resp.json(), args.verbose)
+            else:
+                print(f"❌ Failed to fetch app details ({resp.status_code}): {resp.text}")
+            return
+
+        # XML Mode
+        if not args.app_id and args.app_name:
+            print(f"🔍 Searching for application matching '{args.app_name}' (XML)...")
+            app_list = find_app_by_name(args.app_name, args.region)
+            if not app_list:
+                print("❌ No matching apps found.")
+                sys.exit(1)
+
+            # Handle multiple matches safely
+            if isinstance(app_list, list):
+                if len(app_list) == 1:
+                    args.app_id = app_list[0]["app_id"]
+                else:
+                    print("\n⚠️ Multiple matches found:")
+                    for i, app in enumerate(app_list, 1):
+                        last_update = app.get("last_policy_update", "-")
+                        print(f"  [{i}] {app['app_name']:<35} (App ID: {app['app_id']})  Last Policy Update: {last_update}")
+                    while True:
+                        choice = input("Enter the number of the app to view details: ").strip()
+                        if choice.isdigit() and 1 <= int(choice) <= len(app_list):
+                            args.app_id = app_list[int(choice) - 1]["app_id"]
+                            break
+                        print("Invalid selection. Try again.")
+            else:
+                args.app_id = app_list
 
         if not args.app_id:
             print("❌ Either --app_id or --app_name must be provided.")
             sys.exit(1)
 
-        print(f"📡 Fetching app info for app_id={args.app_id} ...")
-
-        url = xml_api_v5_base(args.region) + "getappinfo.do"
-        response = requests.get(
-            url,
-            params={"app_id": args.app_id},
-            auth=RequestsAuthPluginVeracodeHMAC()
-        )
-
-        if response.status_code != 200:
-            print(f"❌ API request failed ({response.status_code}): {response.text}")
-            sys.exit(1)
-
-        content = response.text
-        if args.verbose:
-            pretty_print_xml(content)
-
-        # Parse XML to confirm presence of <application>
-        ns = {"ns": "https://analysiscenter.veracode.com/schema/2.0/appinfo"}
-        root = ET.fromstring(content)
-        app_elem = root.find("ns:application", ns)
-        if app_elem is None:
-            print("⚠️  No <application> element found — response may be malformed.")
-        else:
-            print("\n✅ Application Info:")
-            for key in ["app_id", "app_name", "business_criticality", "policy",
-                        "policy_updated_date", "teams", "business_unit", "modified_date"]:
-                print(f"  {key:22} : {app_elem.attrib.get(key, '-') or '-'}")
-
-            # Optional: custom fields
-            custom_fields = app_elem.findall("ns:customfield", ns)
-            if custom_fields:
-                print("\n🧩 Custom Fields:")
-                for cf in custom_fields:
-                    print(f"  {cf.attrib.get('name','-')}: {cf.attrib.get('value','-') or '-'}")
+        fetch_app_info_xml(args.app_id, args.region, args.verbose)
 
     except KeyboardInterrupt:
         print("\n🛑 Operation cancelled.")
