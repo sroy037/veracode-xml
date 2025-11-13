@@ -2,7 +2,6 @@ import argparse
 import sys
 import requests
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 from xml_api_cli.utils.api_helpers import find_app_by_name, pretty_print_xml
 from xml_api_cli.config import xml_api_v5_base, api_base_rest
@@ -39,10 +38,7 @@ def setup_parser(parser: argparse.ArgumentParser):
 # REST API Helper
 # ----------------------------------------------------------------------
 def find_app_rest_by_name(app_name: str, region: str = "us"):
-    """
-    Search apps by name using REST API (partial match supported).
-    Returns list of matching apps.
-    """
+    """Search apps by name using REST API (partial match supported)."""
     base_url = api_base_rest(region).rstrip("/")
     url = f"{base_url}/appsec/v1/applications/?name={app_name}"
 
@@ -72,23 +68,20 @@ def find_app_rest_by_name(app_name: str, region: str = "us"):
 # Display REST App Details
 # ----------------------------------------------------------------------
 def show_rest_app_details(app, verbose=False):
-    """
-    Print application details from REST API.
-    """
     profile = app.get("profile", {})
     print("\n✅ Application Info (REST):")
-    print(f"  ID:                 {app.get('id')}")
-    print(f"  GUID:               {app.get('guid')}")
-    print(f"  Name:               {profile.get('name')}")
-    print(f"  Business Unit:      {profile.get('business_unit', {}).get('name', '-')}")
+    print(f"  ID:                   {app.get('id')}")
+    print(f"  GUID:                 {app.get('guid')}")
+    print(f"  Name:                 {profile.get('name')}")
+    print(f"  Business Unit:        {profile.get('business_unit', {}).get('name', '-')}")
     print(f"  Business Criticality: {profile.get('business_criticality', '-')}")
-    print(f"  Last Modified:      {app.get('modified')}")
-    print(f"  Last Scan:          {app.get('last_completed_scan_date', '-')}")
-    print(f"  Policy:             {(profile.get('policies') or [{}])[0].get('name', '-')}")
-    print(f"  Policy Status:      {(profile.get('policies') or [{}])[0].get('policy_compliance_status', '-')}")
-    print(f"  Policy Check Date:  {app.get('last_policy_compliance_check_date')}")
-    print(f"  Created:            {app.get('created')}")
-    print(f"  Results URL:        {app.get('results_url', '-')}")
+    print(f"  Last Modified:        {app.get('modified')}")
+    print(f"  Last Scan:            {app.get('last_completed_scan_date', '-')}")
+    print(f"  Policy:               {(profile.get('policies') or [{}])[0].get('name', '-')}")
+    print(f"  Policy Status:        {(profile.get('policies') or [{}])[0].get('policy_compliance_status', '-')}")
+    print(f"  Policy Check Date:    {app.get('last_policy_compliance_check_date')}")
+    print(f"  Created:              {app.get('created')}")
+    print(f"  Results URL:          {app.get('results_url', '-')}")
 
     if verbose:
         import json
@@ -126,15 +119,17 @@ def fetch_app_info_xml(app_id: str, region: str, verbose=False):
 # ----------------------------------------------------------------------
 def run(args):
     try:
-        # REST Mode
+        # --- REST MODE ---
         if args.api_type == "REST":
+            if args.app_id:
+                print("⚠️  The --app_id parameter is not supported for REST API. Please use --app_name instead.")
+                sys.exit(1)
             if not args.app_name:
-                print("❌ REST API requires --app_name (search by name).")
+                print("❌ REST API requires --app_name to search applications.")
                 sys.exit(1)
 
             print(f"📡 Searching applications matching '{args.app_name}' via REST API...")
             matches = find_app_rest_by_name(args.app_name, args.region)
-
             if not matches:
                 print("❌ No applications found.")
                 sys.exit(1)
@@ -153,7 +148,7 @@ def run(args):
                         break
                     print("Invalid selection. Try again.")
 
-            # Fetch exact app details
+            # Fetch REST details
             base_url = api_base_rest(args.region).rstrip("/")
             detail_url = f"{base_url}/appsec/v1/applications/{guid}"
             resp = requests.get(detail_url, auth=RequestsAuthPluginVeracodeHMAC())
@@ -163,7 +158,7 @@ def run(args):
                 print(f"❌ Failed to fetch app details ({resp.status_code}): {resp.text}")
             return
 
-        # XML Mode
+        # --- XML MODE ---
         if not args.app_id and args.app_name:
             print(f"🔍 Searching for application matching '{args.app_name}' (XML)...")
             app_list = find_app_by_name(args.app_name, args.region)
@@ -171,7 +166,6 @@ def run(args):
                 print("❌ No matching apps found.")
                 sys.exit(1)
 
-            # Handle multiple matches safely
             if isinstance(app_list, list):
                 if len(app_list) == 1:
                     args.app_id = app_list[0]["app_id"]
@@ -190,7 +184,7 @@ def run(args):
                 args.app_id = app_list
 
         if not args.app_id:
-            print("❌ Either --app_id or --app_name must be provided.")
+            print("❌ Either --app_id or --app_name must be provided for XML mode.")
             sys.exit(1)
 
         fetch_app_info_xml(args.app_id, args.region, args.verbose)
