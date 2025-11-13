@@ -126,13 +126,13 @@ def run(args):
                 sys.exit(1)
             if not args.app_name:
                 print("❌ REST API requires --app_name to search applications.")
-                sys.exit(1)
+                sys.exit(0)
 
             print(f"📡 Searching applications matching '{args.app_name}' via REST API...")
             matches = find_app_rest_by_name(args.app_name, args.region)
             if not matches:
                 print("❌ No applications found.")
-                sys.exit(1)
+                sys.exit(0)
 
             if len(matches) == 1:
                 guid = matches[0]["guid"]
@@ -164,7 +164,7 @@ def run(args):
             app_list = find_app_by_name(args.app_name, args.region)
             if not app_list:
                 print("❌ No matching apps found.")
-                sys.exit(1)
+                sys.exit(0)
 
             if isinstance(app_list, list):
                 if len(app_list) == 1:
@@ -185,7 +185,7 @@ def run(args):
 
         if not args.app_id:
             print("❌ Either --app_id or --app_name must be provided for XML mode.")
-            sys.exit(1)
+            sys.exit(0)
 
         fetch_app_info_xml(args.app_id, args.region, args.verbose)
 
