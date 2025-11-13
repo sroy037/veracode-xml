@@ -3,13 +3,14 @@
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Veracode API](https://img.shields.io/badge/veracode-xml--api-orange)](https://docs.veracode.com/r/c_api_main)
+[![Veracode API](https://img.shields.io/badge/veracode-rest--api-purple)](https://docs.veracode.com/r/c_rest_intro)
 
-A unified and modular **CLI tool** for interacting with the [Veracode XML APIs](https://docs.veracode.com/r/c_api_main) —  
-fetch detailed reports, builds, and more — all secured with **HMAC authentication**.
+A unified and modular **CLI tool** for interacting with the [Veracode XML APIs](https://docs.veracode.com/r/c_api_main) and [Veracode REST APIs](https://docs.veracode.com/r/c_rest_intro) —  
+fetch applications, reports, builds, and more — all secured with **HMAC authentication**.
 
 ---
 ## 🚀 Features
-- 🧱 Modular task-based design (e.g. `detailed_report`, `summary`, etc.)
+- 🧱 Modular task-based design (e.g. `api_check`, `app_list`, `summary_report` etc.)
 - 🔄 Supports both **Static (SS)** and **Dynamic (DS)** scan types
 - 📥 Auto-detects latest build for selected app
 - 📂 Download reports in **XML** or **PDF**
@@ -29,27 +30,27 @@ pip install .
 ## 🧠 CLI Usage
 ```
 # General pattern
-xml_api_cli <task> [task-specific parameters]
+veracli <task> [task-specific parameters]
 ```
 
 ---
 ## 📘 Examples
 ```
 # Example: Fetch detailed report for latest dynamic scan
-xml_api_cli detailed_report -n "Customer Portal" -f PDF -s ds
+veracli detailed_report -n "Customer Portal" -f PDF -s ds
 
 # Example: List all applications
-xml_api_cli app_list
+veracli app_list -t REST
 
 # Example: Get info for a specific app
-xml_api_cli app_info -i 1922487
+veracli app_info -i 1922487
 
 # Example: Get info for a specific build (latest if build_id omitted)
-xml_api_cli build_info -n "Customer Portal" -s ds
+veracli build_info -n "Customer Portal" -s ds
 ```
 ⚠️ Use -h or --help with any task to see all available parameters and defaults:
 ```
-xml_api_cli detailed_report -h
+veracli detailed_report -h
 ```
 
 ---
@@ -57,6 +58,7 @@ xml_api_cli detailed_report -h
 ```
 | Task                         | Description                                                  |
 | ---------------------------- | ------------------------------------------------------------ |
+| 🔐 `api_check`               | Validating API ID and Fetching User Information              |
 | 🧰 `app_list`                | Listing all applications accessible to API ID                |
 | 🧾 `app_info`                | Fetch application info by app_id or app_name                 |
 | 📜 `build_list`              | List all builds under a specific application                 |
@@ -91,14 +93,14 @@ def run(args):
     print(f"Running new task: {args.task}")
 Then invoke:
 
-xml_api_cli my_new_task
+veracli my_new_task
 ```
 
 ---
 ## 🧪 Development Setup
 ```
 # From project root
-python -m xml_api_cli.cli detailed_report -n "My App" -f XML -s ds
+python -m veracli.cli detailed_report -n "My App" -f XML -s ds
 
 Or install in editable mode:
 
