@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Veracode API](https://img.shields.io/badge/veracode-xml--api-orange)](https://docs.veracode.com/r/c_api_main) / (https://docs.veracode.com/r/c_rest_intro)
+[![Veracode API](https://img.shields.io/badge/veracode-xml--api-orange)](https://docs.veracode.com/r/c_api_main) / [![Veracode API](https://img.shields.io/badge/veracode-rest--api-purple)](https://docs.veracode.com/r/c_rest_intro)
 
 A unified and modular **CLI tool** for interacting with the [Veracode XML APIs](https://docs.veracode.com/r/c_api_main) and [Veracode REST APIs](https://docs.veracode.com/r/c_rest_intro) —  
 fetch applications, reports, builds, and more — all secured with **HMAC authentication**.
