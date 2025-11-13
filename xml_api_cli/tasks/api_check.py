@@ -100,7 +100,7 @@ def get_user_details(user_id: str, region: str):
     Fetch detailed user info and API credentials from Veracode API.
     """
     base_url = api_base_rest(region).rstrip("/")
-    url = f"{base_url}/users/{user_id}"
+    url = f"{base_url}/api/authn/v2/users/{user_id}"
     print(f"📡 Fetching user details for user_id: {user_id}")
 
     try:
