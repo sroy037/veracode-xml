@@ -19,7 +19,7 @@ SUPPORTED_TASKS = [
 def main():
     parser = argparse.ArgumentParser(
         description=textwrap.dedent("""\
-            🧩 XML API CLI — Unified Interface for Veracode XML API Tasks
+            🧩 VERA CLI — Unified Interface for Veracode API Tasks
             ─────────────────────────────────────────────────────────────
             ⚠️  Note: This is *not* an official Veracode-supported tool.
                 For any issues or feature requests, please contact the tool owner.
