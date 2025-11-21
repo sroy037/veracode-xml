@@ -37,7 +37,7 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
         print(f"✅ Found application: {app['app_name']}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
         return app["app_id"]
 
-    # Multiple matches found
+    # Multiple matches found (user prompt)
     print("\n⚠️  Multiple matches found:")
     for i, app in enumerate(apps, 1):
         print(f"  [{i:<2}] {app['app_name']:<30}\t(ID: {app['app_id']})\t(Last Policy Check: {app['last_policy_update']})")
@@ -99,7 +99,7 @@ def run(args):
             print(f"⚠️  No builds found for scan_type={args.scan_type.upper()}.")
             return
 
-        # pick latest by policy_updated_date if present, else last
+        # Pick latest by policy_updated_date if present, else last
         try:
             latest = max(filtered, key=lambda x: x.attrib.get("policy_updated_date", ""))
         except Exception:
@@ -107,7 +107,7 @@ def run(args):
         build_id = latest.attrib.get("build_id")
         print(f"✅ Using latest build_id={build_id} (scan_type={args.scan_type})")
 
-    # Now fetch buildinfo
+    # Fetch buildinfo
     url = endpoint_getbuildinfo(args.region) + f"?app_id={app_id}&build_id={build_id}"
     print(f"📡 Fetching build info for build_id={build_id} ...")
     resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())

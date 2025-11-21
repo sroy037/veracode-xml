@@ -17,28 +17,16 @@ from typing import Literal
 
 Region = Literal["us", "eu", "us_fed"]
 
-# ---------------------------------------------------------------------
-# Version / metadata
-# ---------------------------------------------------------------------
+## Version / metadata
 TOOL_NAME = "xml-api-cli"
 VERSION = os.getenv("XML_API_CLI_VERSION", "1.0.0")
 DESCRIPTION = "CLI utilities for Veracode XML/REST APIs (modular tasks)."
 
-# ---------------------------------------------------------------------
-# Environment overrides (optional)
-# Use these to override endpoints (useful for testing or private proxies)
-# ---------------------------------------------------------------------
+## Environment overrides (optional)
 ENV_XML_API_CLI_BASE = os.getenv("XML_API_CLI_BASE")         # e.g. https://analysiscenter.veracode.com/api/
 ENV_VERACODE_REST_BASE = os.getenv("VERACODE_REST_BASE")       # e.g. https://api.veracode.com/
 
-# ---------------------------------------------------------------------
-# Canonical domain prefixes (per Veracode docs)
-# - XML APIs (legacy): analysiscenter.veracode.com (Commercial)
-# - REST APIs: api.veracode.com (Commercial)
-#
-# European (EU) region: analysiscenter.veracode.eu, api.veracode.eu
-# US Federal region (if needed): analysiscenter.veracode.us, api.veracode.us
-# ---------------------------------------------------------------------
+## Canonical domain prefixes (see Veracode docs)
 _REGION_DOMAINS = {
     "us": {
         "xml": "https://analysiscenter.veracode.com/api/",
@@ -54,16 +42,12 @@ _REGION_DOMAINS = {
     },
 }
 
-# ---------------------------------------------------------------------
-# Default region and file paths
-# ---------------------------------------------------------------------
+## Default region and file paths
 DEFAULT_REGION: Region = os.getenv("VERACODE_REGION", "us")  # "us" or "eu" or "us_fed"
 DEFAULT_OUTPUT_DIR = os.path.expanduser(os.getenv("VERACODE_OUTPUT_DIR", "~/veracode_reports"))
 CREDENTIALS_FILE = os.path.expanduser(os.getenv("VERACODE_CREDENTIALS_FILE", "~/.veracode/credentials"))
 
-# ---------------------------------------------------------------------
-# Helpers to get API base URLs (handles environment overrides)
-# ---------------------------------------------------------------------
+## Helpers to get API base URLs
 def api_base_xml(region: Region = DEFAULT_REGION) -> str:
     """
     Returns the XML API base URL for the requested region.
@@ -99,11 +83,7 @@ def api_base_rest(region: Region = DEFAULT_REGION) -> str:
         raise ValueError(f"Unknown region: {region}")
     return region_entry["rest"]
 
-# ---------------------------------------------------------------------
-# Short helper functions for common XML API versions/endpoints
-# - Many XML endpoints are under /api/5.0/
-# - Some older endpoints (PDF detailed report) use /api/4.0/
-# ---------------------------------------------------------------------
+## Short helper functions for common XML API versions/endpoints
 def xml_api_v5_base(region: Region = DEFAULT_REGION) -> str:
     """Base prefix for XML v5 endpoints (e.g. getbuildlist.do, detailedreport.do)."""
     base = api_base_xml(region)
@@ -118,10 +98,7 @@ def xml_api_v4_base(region: Region = DEFAULT_REGION) -> str:
         base += "/"
     return f"{base}4.0/"
 
-# ---------------------------------------------------------------------
-# Convenience: endpoints for common actions
-# (callers may still build full URLs, these are helpers)
-# ---------------------------------------------------------------------
+## Convenience: endpoints for common actions
 def endpoint_getapplist(region: Region = DEFAULT_REGION) -> str:
     return xml_api_v5_base(region) + "getapplist.do"
 
@@ -152,9 +129,7 @@ def endpoint_summaryreport_pdf(region: Region = DEFAULT_REGION) -> str:
 def endpoint_mitigationreviewer(region: Region = DEFAULT_REGION) -> str:
     return api_base_xml(region) + "getmitigationinfo.do"
 
-# ---------------------------------------------------------------------
-# Misc helpers
-# ---------------------------------------------------------------------
+## Misc helpers
 def ensure_output_dir(path: str = DEFAULT_OUTPUT_DIR) -> str:
     os.makedirs(os.path.expanduser(path), exist_ok=True)
     return os.path.expanduser(path)

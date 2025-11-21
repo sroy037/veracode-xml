@@ -4,7 +4,7 @@ import textwrap
 import sys
 import importlib
 
-# List all supported tasks (matching modules under tasks/)
+## List all supported tasks (matching modules under tasks/)
 SUPPORTED_TASKS = [
     "api_check",
     "app_list",
@@ -28,7 +28,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    # Create subcommands (e.g. xml-api-cli detailed_report ...)
+    # Create subcommands for each task
     subparsers = parser.add_subparsers(
         title="Available Tasks",
         dest="task",
