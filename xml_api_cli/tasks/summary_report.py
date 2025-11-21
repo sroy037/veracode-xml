@@ -22,6 +22,7 @@ HELP_TEXT = "💬 Fetch summary report (XML/PDF or REST JSON) for a specific app
 def setup_parser(parser):
     parser.add_argument("-i", "--app_id", help="Veracode App ID (XML only, required if --app_name not used)")
     parser.add_argument("-n", "--app_name", help="Veracode App Name (required if --app_id not used)")
+    parser.add_argument("-g", "--guid", help="Application GUID (for specific REST details lookup).")
     parser.add_argument("-f", "--format", choices=["XML", "PDF"], help="Report format (required for XML)")
     parser.add_argument("-s", "--scan_type", choices=["ss", "ds"], default="ss", help="Scan type (required for XML)")
     parser.add_argument("-r", "--region", choices=["us", "eu", "us_fed"], default="us", help="Region for API requests")
@@ -76,18 +77,22 @@ def print_rest_summary(data: dict):
     print("="*70)
 
     app_name = data.get("app_name", "-")
-    guid = data.get("app_id", "-")
+    app_id = data.get("app_id", "-")
+    version = data.get("version", "-")
     last_scan = data.get("last_update_time", "-")
     policy = data.get("policy_name", "-")
     policy_status = data.get("policy_compliance_status", "-")
-    bu = data.get("business_unit", "Not Specified")
+    total_flaws = data.get("total_flaws", "-")
+    mitigated = data.get("flaws_not_mitigated", "-")
 
-    print(f"🧱 Application: {app_name}")
-    print(f"🆔 GUID:        {guid}")
-    print(f"📅 Last Scan:   {last_scan}")
-    print(f"🏢 Business Unit: {bu}")
-    print(f"📋 Policy:      {policy}")
-    print(f"✅ Policy Status: {policy_status}")
+    print(f"🧱 Application:     {app_name}")
+    print(f"🆔 APP ID:          {app_id}")
+    print(f"🧩 Scan Name:       {version}")
+    print(f"📅 Last Scan:       {last_scan}")
+    print(f"📋 Policy:          {policy}")
+    print(f"✅ Policy Status:   {policy_status}")
+    print(f"⚠️ Total Flaws:     {total_flaws}")
+    print(f"🧠 Flaws Not Mitigated: {mitigated}")
     print("-"*70)
 
     for analysis_type, title, icon in [
@@ -142,6 +147,16 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
 def run(args):
     print("📘 Task: Fetch Summary Report")
     try:
+        if args.guid:
+            guid = args.guid
+            report_url = f"{api_base_rest(args.region).rstrip('/')}/appsec/v2/applications/{guid}/summary_report"
+            resp = requests.get(report_url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=30)
+            if resp.status_code != 200:
+                print(f"❌ Failed to fetch REST summary report ({resp.status_code}): {resp.text}")
+                sys.exit(1)
+            data = resp.json()
+            print_rest_summary(data)
+            return
         if args.api_type == "REST":
             if not args.app_name:
                 print("❌ REST API requires --app_name to search applications.")

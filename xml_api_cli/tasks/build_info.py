@@ -14,7 +14,7 @@ from xml_api_cli.utils.api_helpers import find_app_by_name
 HELP_TEXT = "🧩 Fetch info for a specific or latest build."
 
 def setup_parser(parser):
-    parser.add_argument("-a", "--app_id", help="Veracode application ID")
+    parser.add_argument("-i", "--app_id", help="Veracode application ID")
     parser.add_argument("-n", "--app_name", help="Veracode application name (alternate to --app_id)")
     parser.add_argument("-b", "--build_id", help="Specific build ID (optional)")
     parser.add_argument(

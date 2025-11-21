@@ -1,0 +1,90 @@
+services:
+
+  # 1. Core Agent Logic
+  agent:
+    build: 
+      context: . 
+    container_name: veracli_agent
+    command: ["python", "agent/server/app.py"] 
+    ports:
+      - "8001:8001"
+    volumes:
+      # Credentials mounted, though likely unused by agent/server.py
+      - ~/.veracode/credentials:/root/.veracode/credentials:ro
+    networks:
+      - veranet
+
+  # 2. Agent API Server (The CLI Executor - NEEDS the credentials)
+  agent_api:
+    build: 
+      context: . 
+    container_name: veracli_agent_api
+    environment:
+      AGENT_URL: "http://agent:8001/query"
+    command: ["uvicorn", "agent_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      # CRITICAL: This service executes veracli and requires credentials.
+      - ~/.veracode/credentials:/root/.veracode/credentials:ro
+    depends_on:
+      - agent
+    networks:
+      - veranet
+
+  # 3. Web UI (Primary Frontend)
+  web_ui:
+    build: 
+      context: . 
+    container_name: veracli_web_ui
+    environment:
+      AGENT_API_URL: "http://agent_api:8000/run"
+    command: ["python", "web_ui/server.py"]
+    ports:
+      - "3000:3000"
+    volumes:
+      # Credentials mounted, though likely unused by the web UI server.
+      - ~/.veracode/credentials:/root/.veracode/credentials:ro
+    depends_on:
+      - agent_api
+    networks:
+      - veranet
+
+  # # 4. Secondary UI 
+  # ui:
+  #   build: 
+  #     context: . 
+  #   container_name: veracli_ui
+  #   environment:
+  #     AGENT_API_URL: "http://agent_api:8000/run"
+  #   command: ["python", "ui/server.py"]
+  #   ports:
+  #     - "3001:3000"
+  #   volumes:
+  #     # Credentials mounted, though likely unused by the secondary UI server.
+  #     - ~/.veracode/credentials:/root/.veracode/credentials:ro
+  #   depends_on:
+  #     - agent_api
+  #   networks:
+  #     - veranet
+
+  # # 5. Slackbot (Integration)
+  # slackbot:
+  #   build: 
+  #     context: . 
+  #   container_name: veracli_slackbot
+  #   environment:
+  #     SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
+  #     SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+  #     AGENT_API_URL: "http://agent_api:8000/run"
+  #   command: ["python", "slackbot/bot.py"]
+  #   volumes:
+  #     # Credentials mounted, though likely unused by the slackbot code.
+  #     - ~/.veracode/credentials:/root/.veracode/credentials:ro
+  #   depends_on:
+  #     - agent_api
+  #   networks:
+  #     - veranet
+
+networks:
+  veranet:

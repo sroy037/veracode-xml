@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+jinja2
+requests
+python-dotenv
+flask
+flask_socketio

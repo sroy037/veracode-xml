@@ -13,13 +13,14 @@ SUPPORTED_TASKS = [
     "build_info",
     "detailed_report",
     "summary_report",
-    "review_mitigation"
+    "review_mitigation",
+    "app_info_ui_helper"
 ]
 
 def main():
     parser = argparse.ArgumentParser(
         description=textwrap.dedent("""\
-            🧩 VERA CLI — Unified Interface for Veracode API Tasks
+            🧩 XML API CLI — Unified Interface for Veracode XML API Tasks
             ─────────────────────────────────────────────────────────────
             ⚠️  Note: This is *not* an official Veracode-supported tool.
                 For any issues or feature requests, please contact the tool owner.

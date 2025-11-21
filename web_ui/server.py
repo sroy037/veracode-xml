@@ -1,0 +1,659 @@
+import html
+import re
+import json
+import shlex 
+import os
+import sys
+import base64 
+from typing import Optional, Any, Dict
+
+from flask import Flask, render_template, request # pyright: ignore[reportMissingImports]
+from flask_socketio import SocketIO, emit, join_room, leave_room # pyright: ignore[reportMissingModuleSource]
+import requests
+
+# --- Configuration ---
+app = Flask(__name__)
+# Load secret key from env or generate a random one
+app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", os.urandom(24)) 
+# Allow all origins for development/embed purposes
+socketio = SocketIO(app, cors_allowed_origins="*") 
+
+AGENT_API_URL = os.getenv("AGENT_API_URL", "http://localhost:8000/run")
+DEFAULT_REGION = "us" 
+
+# --- Global State Management for Multi-Match and File Download ---
+# Stores interactive context per session ID (sid).
+# Context can store:
+# - "matches" for multi-selection
+# - "action": "select", "download", or "review_mitigation"
+# - "agent_path" for pending file download
+# - "base_cmd" for pending mitigation review command
+# - "optional_args" (Crucially added for multi-match execution)
+multi_match_context: Dict[str, Dict[str, Any]] = {} 
+
+# --- Regex for Command Parsing ---
+# Matches: app info NAME rest
+#APP_INFO_REST_NAME_REGEX = re.compile(r"^veracli\s+(app_info)\s+([^ ]+)\s+rest$", re.IGNORECASE)
+# Matches: veracli (build_list|build_info|detailed_report|summary_report|review_mitigation) -n NAME ...
+# NOTE: review_mitigation is now included here.
+VERACLI_HELPER_REGEX = re.compile(r"^veracli\s+(app_info|build_list|build_info|detailed_report|summary_report|review_mitigation)\s+-n\s+.*", re.IGNORECASE)
+# Regex to find the file path created by the veracli agent 
+FILE_PATH_REGEX = re.compile(r"Report downloaded successfully:\s+(.*)", re.IGNORECASE)
+# NEW: Regex to find the file path when the UI Helper runs the command (it sees the pre-download prompt)
+FILE_GENERATED_REGEX = re.compile(r"File generated:\s*(.+?)\. Download now\? \[Y/n\]")
+
+
+# --- Helper Functions (Command Parsing) ---
+
+def parse_optional_args(query: str) -> str:
+    """
+    Extracts optional arguments (like -s ds, -b 1234) that follow the -n NAME argument
+    from the original user query, ensuring they are properly quoted using shlex.quote().
+    """
+    optional_args = [] 
+    try:
+        # Use shlex.split to correctly tokenize the user's input, preserving quoted values
+        tokens = shlex.split(query)
+        name_index = -1
+        
+        # Find the index of the application name flag
+        if '-n' in tokens:
+            name_index = tokens.index('-n')
+        elif '--app_name' in tokens:
+            name_index = tokens.index('--app_name')
+        
+        if name_index != -1 and name_index + 2 <= len(tokens):
+            # Captures all tokens *after* the application name (tokens[name_index + 1])
+            for token in tokens[name_index + 2:]:
+                # Use shlex.quote to safely wrap arguments with spaces (like "High & Above")
+                optional_args.append(shlex.quote(token))
+                
+        # Join the safely quoted tokens back into a single argument string
+        return " ".join(optional_args).strip()
+    except Exception as e:
+        # If parsing fails (e.g., malformed shlex input), return empty string and log error
+        print(f"Error parsing optional arguments: {e}", file=sys.stderr)
+        return ""
+
+# --- Helper Functions for File Download (UPDATED) ---
+
+def extract_detailed_report_path(agent_output: str) -> Optional[str]:
+    """
+    Extracts the local server file path from the agent's output if the report download was successful.
+    Checks for two possible output formats and ensures an absolute path is returned.
+    """
+    # 1. Check for the primary "Report downloaded successfully:" line
+    path_match = FILE_PATH_REGEX.search(agent_output)
+    if path_match:
+        # This path should be absolute (e.g., /app/report.xml)
+        return path_match.group(1).strip()
+        
+    # 2. Check for the "File generated: <filename>. Download now? [Y/n]" line
+    file_gen_match = FILE_GENERATED_REGEX.search(agent_output)
+    if file_gen_match:
+        extracted_path = file_gen_match.group(1).strip()
+        
+        # CRITICAL FIX: If the path is just a filename (i.e., not absolute),
+        # prepend /app/ as the agent runs in a container with CWD = /app/
+        if extracted_path and not extracted_path.startswith('/'):
+            return f"/app/{extracted_path}"
+        
+        return extracted_path
+        
+    return None
+
+def _execute_agent_file_retrieval(agent_path: str):
+    """
+    Executes a command on the remote agent to retrieve the file's raw content.
+    Returns the file content string (expected to be base64 if binary) or raises an exception.
+    """
+    # The agent is instructed to read the file and return its base64 content
+    retrieval_cmd = f"retrieve_agent_file {agent_path}"
+    # START NEW LOGGING
+    print(f"SERVER LOG: Sending file retrieval command to agent: {retrieval_cmd}", file=sys.stderr)
+    # END NEW LOGGING
+    
+    try:
+        retrieval_response = requests.post(AGENT_API_URL, json={"query": retrieval_cmd})
+        retrieval_response.raise_for_status()
+        retrieval_data = retrieval_response.json()
+        
+        # START NEW LOGGING
+        print(f"SERVER LOG: Agent response (Exit Code: {retrieval_data.get('exit_code')}) - Stderr: {retrieval_data.get('stderr', '')[:50]}...", file=sys.stderr)
+        # END NEW LOGGING
+
+        file_content_from_agent = retrieval_data.get("output", "")
+        
+        if not file_content_from_agent:
+            # CRITICAL: Capture the agent's exit code and stderr for better diagnostics
+            agent_stderr = retrieval_data.get('stderr', 'N/A')
+            agent_exit_code = retrieval_data.get('exit_code', 'N/A')
+            
+            error_details = f"Agent Exit Code: {agent_exit_code}. Agent Stderr: {agent_stderr}"
+            # UPDATED ERROR MESSAGE
+            raise ValueError(f"Agent returned no file content for: {agent_path}. ({error_details})")
+        
+        return file_content_from_agent
+        
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Failed to execute file retrieval on agent (API Error): {e}")
+    except ValueError as e:
+        # Re-raise the more detailed error message
+        raise Exception(f"File retrieval error: {e}")
+
+
+def handle_detailed_report_transfer_from_agent(sid: str, agent_file_path: str, file_content: str) -> bool:
+    """
+    Sends the file content retrieved from the agent to the client for download.
+    Ensures XML content is base64 encoded for consistent client handling.
+    """
+    file_name = os.path.basename(agent_file_path)
+    
+    # 1. Determine MIME type from file extension
+    if file_name.lower().endswith(".pdf"):
+        mime_type = "application/pdf"
+    elif file_name.lower().endswith(".xml"):
+        mime_type = "application/xml"
+    else:
+        mime_type = "application/octet-stream"
+
+    try:
+        # FIX: Ensure content is base64 encoded. Agent usually handles binary (PDF),
+        # but text files (XML) need explicit encoding here if returned as raw strings.
+        if mime_type == "application/xml":
+            # Convert raw XML string content to bytes and then base64 encode it.
+            encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
+        else:
+            # Assume content is already correctly formatted (e.g., base64 for PDF)
+            encoded_content = file_content
+
+        # 2. Emit the content to the client 
+        socketio.emit('file_download', {
+            'content': encoded_content, 
+            'filename': file_name,
+            'mimeType': mime_type
+        }, room=sid)
+
+        # 3. Notify the user of successful transfer
+        socketio.emit('cli_output', {'data': f"\n✨ Report successfully downloaded to client: {file_name}\n"}, room=sid)
+        
+        return True
+
+    except Exception as e:
+        socketio.emit('cli_output', {'data': f"\n❌ Failed to send file {file_name} to client: {str(e)}\n"}, room=sid)
+        
+    return False
+
+
+# --- Helper Functions (execute_agent_command_stream) ---
+
+def format_matches_for_display(matches):
+    """Formats the list of matches (from helper's JSON output) into CLI-style output."""
+    output = ["\n⚠️ Multiple matches found. Please select an option:"]
+    
+    for match in matches:
+        # Ensure we display the REST ID (GUID) or XML ID based on match data
+        identifier = f"GUID: {match['guid']}" if match['guid'] != '-' else f"ID: {match['id']}"
+        output.append(f"  [{match['index']}] {match['name']:<50} ({identifier}) Last Scan: {match.get('last_scan', '-')}")
+        
+    return "\n".join(output)
+
+# CRITICAL FIX: Added optional_args parameter to pass arguments reliably
+def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: bool = False, optional_args: str = ""):
+    """
+    Executes the command against the agent API and streams the output 
+    back to the client via SocketIO events.
+    """
+    
+    payload = {"query": command_str}
+    
+    # 1. Pre-extract command type from the original input string (if it's a helper call)
+    original_command_type = None
+    if is_helper_call:
+        cleaned_command_str = command_str.strip() 
+        match_inferred = VERACLI_HELPER_REGEX.match(cleaned_command_str)
+        if match_inferred:
+            original_command_type = match_inferred.group(1)
+            
+    try:
+        response = requests.post(AGENT_API_URL, json=payload)
+        response.raise_for_status() 
+        data = response.json() 
+
+        output = data.get("output", "")
+        stderr = data.get("stderr", "")
+        exit_code = data.get("exit_code", 0)
+
+        if isinstance(output, list):
+            output = "\n".join(output)
+        if isinstance(stderr, list):
+            stderr = "\n".join(stderr)
+
+        # Use final_output and final_cmd variables for both helper and direct execution
+        final_output = output
+        final_stderr = stderr
+        final_exit_code = exit_code
+        final_cmd = command_str
+        
+        # Initialize command_type for scope
+        command_type = None
+
+        # --- Intercept Helper Task Output (JSON/Error) ---
+        if is_helper_call:
+            
+            try:
+                helper_result = json.loads(output.strip())
+                status = helper_result.get("status")
+                
+                api_type = helper_result.get("api_type", "rest") 
+                # Use original_command_type as a reliable fallback
+                command_type = helper_result.get("command", original_command_type)
+                
+                # FIX: Explicitly use original command type for XML/Unique match 
+                if api_type == "xml" and original_command_type:
+                    command_type = original_command_type
+                
+                if status == "unique":
+                    app_name = helper_result.get("app_name") 
+                    app_guid = helper_result.get("guid") 
+                    # CRITICAL FIX: The helper outputs 'app_id', not 'id'.
+                    app_id = helper_result.get("app_id")
+
+                    final_cmd_build = ""
+                    match_id = ""
+                    
+                    # NOTE: optional_args were passed to this function via handle_command
+                    
+                    # REST Final Execution for Unique Match
+                    if api_type == "rest" and app_guid:
+                        match_id = f"GUID: {app_guid}"
+                        
+                        if command_type in ["summary_report"]:
+                            # Use optional_args from the function call
+                            final_cmd_build = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {DEFAULT_REGION}" 
+                        else:
+                            final_cmd_build = f"veracli app_info_ui_helper --guid {app_guid} --region {DEFAULT_REGION}" 
+                        
+                    # CRITICAL FIX: Changed -a to -i based on user's successful execution log
+                    elif api_type == "xml" and app_id and command_type:
+                        # XML/App ID execution 
+                        # Use optional_args from the function call
+                        # NOTE: Using -i is correct for XML app info/report commands
+                        final_cmd_build = f"veracli {command_type} -i {app_id} {optional_args} --region {DEFAULT_REGION}" 
+                        match_id = f"ID: {app_id}"
+                    
+                    if final_cmd_build:
+                        final_cmd = final_cmd_build # Set final_cmd for use outside this block
+                        socketio.emit('cli_output', {'data': f"\n✅ Unique match found (Name: {app_name}, {match_id}). Executing: {final_cmd}\n"}, room=sid)
+                        
+                        # Execute the final lookup command 
+                        payload_final = {"query": final_cmd}
+                        response_final = requests.post(AGENT_API_URL, json=payload_final)
+                        response_final.raise_for_status()
+                        data_final = response_final.json()
+                        
+                        final_output = data_final.get("output", "")
+                        final_stderr = data_final.get("stderr", "")
+                        final_exit_code = data_final.get("exit_code", 0)
+                        
+                        if isinstance(final_output, list): final_output = "\n".join(final_output)
+                        if isinstance(final_stderr, list): final_stderr = "\n".join(final_stderr)
+                        
+                        
+                        # --- Handle Review Mitigation Interactive Prompt ---
+                        mitigation_prompt_text = "Enter numbers of issues to fetch mitigation info (comma-separated):"
+                        
+                        if command_type == "review_mitigation" and final_exit_code != 0 and mitigation_prompt_text in final_output:
+                            
+                            # Store context and prompt user 
+                            multi_match_context[sid] = {
+                                "action": "review_mitigation",
+                                "base_cmd": final_cmd, # The command that generated the list and crashed
+                                "region": DEFAULT_REGION
+                            }
+                            
+                            # Extract and stream output *up to* the interactive prompt
+                            prompt_index = final_output.find(mitigation_prompt_text)
+                            output_to_stream = final_output[:prompt_index]
+
+                            # Stream the output *up to* the interactive prompt
+                            for chunk in output_to_stream.splitlines(keepends=True):
+                                socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+                            socketio.emit('cli_output', {'data': f"\n➡️ Enter issue numbers (e.g., 1, 3, 5) to review mitigation details:\n"}, room=sid)
+                            socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+                            socketio.emit('cli_prompt', {'data': 'ISSUE IDS: '}, room=sid)
+                            return # EXIT: Wait for user input
+                        
+                        # --- Handle Detailed Report Download Prompt ---
+                        is_detailed_report = re.match(r"^veracli detailed_report\s+.*", final_cmd, re.IGNORECASE)
+                        agent_path = extract_detailed_report_path(final_output)
+
+                        if is_detailed_report and final_exit_code == 0 and agent_path:
+                            # Store context and prompt user instead of immediate download
+                            multi_match_context[sid] = {
+                                "action": "download",
+                                "agent_path": agent_path
+                            }
+                            file_name = os.path.basename(agent_path)
+                            
+                            # Stream the output *up to* the download success/prompt message
+                            for chunk in final_output.splitlines(keepends=True):
+                                if "Report downloaded successfully:" in chunk or "File generated:" in chunk:
+                                    break # Stop streaming here
+                                socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+                            socketio.emit('cli_output', {'data': f"\n📄 File generated: {file_name}. Download now? [Y/n]:\n"}, room=sid)
+                            socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+                            socketio.emit('cli_prompt', {'data': 'DOWNLOAD [Y/n]: '}, room=sid)
+                            return # EXIT: Wait for user input
+                        
+                        # Stream the standard output if not a successful download OR mitigation prompt
+                        for chunk in final_output.splitlines(keepends=True):
+                            socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+                        if final_stderr and final_stderr.strip().lower() not in ('none', ''):
+                            socketio.emit('cli_output', {'data': f"\n--- ERROR/STDERR ---\n{html.escape(final_stderr)}\n"}, room=sid)
+                        
+                        socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+                        
+                        # Signal the prompt and RETURN
+                        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+                        return 
+                    else:
+                        # *** IMPROVED DIAGNOSTIC ERROR MESSAGE HERE ***
+                        missing_data = []
+                        if api_type == "xml" and not app_id:
+                            # This should now be correctly caught due to the fix above
+                            missing_data.append("App ID (expected for XML command)")
+                        if api_type == "rest" and not app_guid:
+                            missing_data.append("App GUID (expected for REST command)")
+                        if not command_type:
+                            missing_data.append("Command Type")
+                            
+                        error_detail = ""
+                        if missing_data:
+                            error_detail = f"Details: The helper returned 'unique' status but is missing the following required keys: {', '.join(missing_data)}."
+                        else:
+                             error_detail = "Details: The unique match data failed to construct a valid final command."
+                             
+                        # Emit a more detailed error message to help diagnose the flutter issue
+                        socketio.emit('cli_output', {'data': f"\n⚠️ Missing required data for final lookup (Type: {api_type}). {error_detail}\n"}, room=sid)
+                        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+                        return
+                    
+                elif status == "multiple":
+                    matches = helper_result.get("matches")
+                    
+                    # CRITICAL FIX: Store optional_args here so they can be used after selection
+                    multi_match_context[sid] = {
+                        "action": "select", # Explicitly set action to select
+                        "matches": matches,
+                        "api_type": api_type,
+                        "command": command_type, 
+                        "optional_args": optional_args # <<< Storing optional args reliably
+                    } 
+                    
+                    display_output = format_matches_for_display(matches)
+                    socketio.emit('cli_output', {'data': html.escape(display_output)}, room=sid)
+                    socketio.emit('cli_output', {'data': "\n\n➡️ Enter the selection number below:\n"}, room=sid)
+                    socketio.emit('cli_prompt', {'data': 'SELECT: '}, room=sid) 
+                    return 
+
+                elif status == "no_match":
+                    socketio.emit('cli_output', {'data': f"\n❌ No applications found matching '{helper_result.get('app_name')}'.\n"}, room=sid)
+                    output = ""
+                
+                elif status == "error":
+                    socketio.emit('cli_output', {'data': f"\n❌ UI Helper Error: {helper_result.get('message', 'Unknown error')}\n"}, room=sid)
+                    output = ""
+                
+            except json.JSONDecodeError as e:
+                socketio.emit('cli_output', {'data': f"\n⚠️ Helper output was not valid JSON (Error: {e}).\nRaw output below:\n"}, room=sid)
+                
+                if stderr:
+                     socketio.emit('cli_output', {'data': f"\n--- STDERR (Agent Execution Error) ---\n{html.escape(stderr)}\n"}, room=sid)
+
+                socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+                return 
+        
+        # --- Handle Review Mitigation Interactive Prompt (Direct Execution) ---
+        is_review_mitigation = re.match(r"^veracli review_mitigation\s+.*", final_cmd, re.IGNORECASE)
+        mitigation_prompt_text = "Enter numbers of issues to fetch mitigation info (comma-separated):"
+        
+        if is_review_mitigation and final_exit_code != 0 and mitigation_prompt_text in final_output:
+            
+            # Store context and prompt user 
+            multi_match_context[sid] = {
+                "action": "review_mitigation",
+                "base_cmd": final_cmd, # The command that generated the list and crashed
+                "region": DEFAULT_REGION
+            }
+            
+            # Extract and stream output *up to* the interactive prompt
+            prompt_index = final_output.find(mitigation_prompt_text)
+            output_to_stream = final_output[:prompt_index]
+
+            # Stream the output *up to* the interactive prompt
+            for chunk in output_to_stream.splitlines(keepends=True):
+                socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+            socketio.emit('cli_output', {'data': f"\n➡️ Enter issue numbers (e.g., 1, 3, 5) to review mitigation details:\n"}, room=sid)
+            socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+            socketio.emit('cli_prompt', {'data': 'ISSUE IDS: '}, room=sid)
+            return # EXIT: Wait for user input
+        
+        # --- Handle Detailed Report Download Prompt (Direct Execution) ---
+        is_detailed_report = re.match(r"^veracli detailed_report\s+.*", command_str, re.IGNORECASE)
+        agent_path = extract_detailed_report_path(output)
+
+        if is_detailed_report and exit_code == 0 and agent_path:
+            # Store context and prompt user instead of immediate download
+            multi_match_context[sid] = {
+                "action": "download",
+                "agent_path": agent_path
+            }
+            file_name = os.path.basename(agent_path)
+            
+            # Stream output up to the success message
+            for chunk in output.splitlines(keepends=True):
+                if "Report downloaded successfully:" in chunk or "File generated:" in chunk:
+                    break # Stop streaming here
+                socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+            socketio.emit('cli_output', {'data': f"\n📄 File generated: {file_name}. Download now? [Y/n]:\n"}, room=sid)
+            socketio.emit('cli_output', {'data': f"\n(Exit Code: {exit_code})\n"}, room=sid)
+            socketio.emit('cli_prompt', {'data': 'DOWNLOAD [Y/n]: '}, room=sid)
+            return # EXIT: Wait for user input
+
+        # --- Standard Output Stream (for non-download or failed commands) ---
+        for chunk in final_output.splitlines(keepends=True):
+            socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+        # --- Final Prompts ---
+        if final_stderr and final_stderr.strip().lower() not in ('none', ''):
+            socketio.emit('cli_output', {'data': f"\n--- ERROR/STDERR ---\n{html.escape(final_stderr)}\n"}, room=sid)
+        
+        socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+        
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"\n❌ HTTP Error {response.status_code}: {str(e)}\n"
+        socketio.emit('cli_output', {'data': error_msg}, room=sid)
+    except Exception as e:
+        error_msg = f"\n❌ General Error: {str(e)}\n"
+        socketio.emit('cli_output', {'data': error_msg}, room=sid)
+        
+    # Signal the end of the command execution
+    socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+
+# --- WebSocket Event Handlers ---
+
+@socketio.on('connect')
+def handle_connect():
+    join_room(request.sid)
+    emit('cli_output', {'data': 'Veracli Shell Connected. Type a command or click a button to begin.\n'})
+    emit('cli_prompt', {'data': '> '})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    if request.sid in multi_match_context:
+        del multi_match_context[request.sid]
+    leave_room(request.sid)
+
+@socketio.on('command')
+def handle_command(data):
+    """Receives command from the client and executes it."""
+    user_cmd = data.get('cmd', '').strip()
+    sid = request.sid
+
+    if not user_cmd:
+        emit('cli_prompt', {'data': '> '}, room=sid)
+        return
+
+    emit('cli_clear_prompt', {}, room=sid)
+    
+    # --- 1. Check for Pending Download Action ---
+    if sid in multi_match_context and multi_match_context[sid].get("action") == "download":
+        
+        context = multi_match_context.pop(sid) # Remove context immediately to prevent re-trigger
+        agent_path = context["agent_path"]
+        
+        if user_cmd.lower() in ('y', 'yes', ''): # Accept 'Y' or empty input as confirmation
+            socketio.emit('cli_output', {'data': f"User selected Y. Retrieving file from agent...\n"}, room=sid)
+            try:
+                # STEP 2: RETRIEVE CONTENT from the remote agent
+                file_content = _execute_agent_file_retrieval(agent_path)
+                
+                # STEP 3: TRANSFER to client
+                handle_detailed_report_transfer_from_agent(sid, agent_path, file_content)
+                
+            except Exception as e:
+                socketio.emit('cli_output', {'data': f"\n❌ Download failed: {str(e)}\n"}, room=sid)
+
+        elif user_cmd.lower() in ('n', 'no'):
+            file_name = os.path.basename(agent_path)
+            socketio.emit('cli_output', {'data': f"Download of {file_name} skipped.\n"}, room=sid)
+        else:
+            # Invalid input: Restore context and re-prompt
+            multi_match_context[sid] = context
+            file_name = os.path.basename(agent_path)
+            socketio.emit('cli_output', {'data': f"\nInvalid input. File generated: {file_name}. Download now? [Y/n]:\n"}, room=sid)
+            socketio.emit('cli_prompt', {'data': 'DOWNLOAD [Y/n]: '}, room=sid)
+            return
+
+        # Always return to standard prompt after handling download choice
+        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
+    
+    # --- 1a. Check for Pending Review Mitigation Action ---
+    if sid in multi_match_context and multi_match_context[sid].get("action") == "review_mitigation":
+        
+        context = multi_match_context.pop(sid) # Remove context immediately 
+        issue_ids = user_cmd.strip()
+        base_cmd = context["base_cmd"]
+        
+        if not issue_ids:
+            socketio.emit('cli_output', {'data': "No issue IDs provided. Returning to main prompt.\n"}, room=sid)
+        else:
+            # Build the new command by appending --issue_ids 
+            final_mitigation_cmd = f"{base_cmd} --issue_ids {issue_ids}"
+            
+            socketio.emit('cli_output', {'data': f"\nExecuting mitigation review for IDs: {issue_ids}\nCommand: {final_mitigation_cmd}\n"}, room=sid)
+            
+            # Execute the final, non-interactive command
+            execute_agent_command_stream(final_mitigation_cmd, sid, is_helper_call=False)
+            return # EXIT: execute_agent_command_stream will handle the prompt at the end
+            
+        # If execution skipped (no issue IDs) or successful execution finished, return to main prompt
+        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
+    
+    # --- 2. Check for Selection Input (Action: 'select') ---
+    if sid in multi_match_context and multi_match_context[sid].get("action") == "select" and user_cmd.isdigit():
+        selection_num = int(user_cmd)
+        context = multi_match_context.pop(sid)
+        
+        matches = context["matches"]
+        api_type = context["api_type"]
+        command_type = context["command"]
+        
+        # Retrieve optional arguments from context (CRITICAL: now reliably stored)
+        optional_args = context.get("optional_args", "") 
+
+        selected_match = next((m for m in matches if m['index'] == selection_num), None)
+
+        if selected_match:
+            app_name = selected_match['name']
+            app_guid = selected_match.get('guid') 
+            app_id = selected_match.get('id')     
+            
+            final_cmd = ""
+            
+            if api_type == "rest" and app_guid:
+                if command_type in ["summary_report", "detailed_report", "review_mitigation"]:
+                    final_cmd = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {DEFAULT_REGION}" 
+                else:
+                    final_cmd = f"app info guid {app_guid} rest --region {DEFAULT_REGION}" 
+                
+            # CRITICAL FIX: Changed -a to -i
+            elif api_type == "xml" and app_id and command_type:
+                final_cmd = f"veracli {command_type} -i {app_id} {optional_args} --region {DEFAULT_REGION}" 
+            else:
+                 # Re-using the diagnostic improvement for selection failure
+                 missing_data = []
+                 if api_type == "xml" and not app_id:
+                     missing_data.append("App ID (expected for XML command)")
+                 if api_type == "rest" and not app_guid:
+                     missing_data.append("App GUID (expected for REST command)")
+                 
+                 error_detail = f"Details: Selection succeeded but the match data is missing: {', '.join(missing_data)}."
+                 
+                 socketio.emit('cli_output', {'data': f"\n⚠️ Missing required data for final lookup (Type: {api_type}). {error_detail}\n"}, room=sid)
+                 socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+                 return
+            
+            socketio.emit('cli_output', {'data': f"\n✅ Selection '{selection_num}' ({app_name}) made. Executing: {final_cmd}\n"}, room=sid)
+            
+            execute_agent_command_stream(final_cmd, sid, is_helper_call=False)
+        else:
+            socketio.emit('cli_output', {'data': "\n❌ Invalid selection number. Please try the command again.\n"}, room=sid)
+            socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
+
+    # 3. Check for Helper Commands (REST and XML)
+    #match_name_rest = APP_INFO_REST_NAME_REGEX.match(user_cmd)
+    match_name_xml = VERACLI_HELPER_REGEX.match(user_cmd)
+
+    if match_name_xml: 
+        helper_cmd = user_cmd 
+        
+        # Extract optional arguments from the original command
+        optional_args = parse_optional_args(user_cmd)
+        
+        socketio.emit('cli_output', {'data': f"\n🔎 Checking for matches via UI Helper (Cmd: {helper_cmd})....\n"}, room=sid)
+        
+        # CRITICAL FIX: Pass optional_args to the stream function, making context storage reliable
+        execute_agent_command_stream(helper_cmd, sid, is_helper_call=True, optional_args=optional_args) 
+        
+        return
+
+    # 4. Standard Command Execution (Fallthrough for other commands)
+    if sid in multi_match_context:
+        del multi_match_context[sid] 
+    
+    execute_agent_command_stream(user_cmd, sid, is_helper_call=False)
+
+# --- Flask Routes (Only for initial page load) ---
+@app.route("/", methods=["GET"])
+def index():
+    # Assuming the HTML content is served via a template named 'chat.html'
+    return render_template("chat.html")
+
+if __name__ == "__main__":
+    socketio.run(
+        app, 
+        host="0.0.0.0", 
+        port=3000, 
+        debug=True, 
+        allow_unsafe_werkzeug=True
+    )

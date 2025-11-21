@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+from time import sleep
 import requests
 from datetime import datetime, timezone
 from configparser import ConfigParser
@@ -66,16 +67,49 @@ def list_all_users(region: str):
             print("⚠️  No users found.")
             return
 
-        headers = ["Active", "Name", "Email", "User ID", "Username", "Login Enabled"]
+        headers = ["Name", "Email", "User ID", "Username", "Login Enabled"]
         rows = []
         for u in total_users:
-            status_icon = "🟢" if u.get("active") else "🔴"
+            #status_icon = "🟢" if u.get("active") else "🔴"
             name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
             email = u.get("email_address", "")
             uid = u.get("user_id", "")
             uname = u.get("user_name", "")
             login_status = "✅" if u.get("login_enabled") else "❌"
-            rows.append([status_icon, name, email, uid, uname, login_status])
+            # if uid:
+            #     base_url = api_base_rest(region).rstrip("/")
+            #     url = f"{base_url}/api/authn/v2/users/{uid}"
+            #     sleep(1)
+            #     try:
+            #         resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            #         if resp.status_code == 200:
+            #             data = resp.json()
+            #             api_creds = data.get("api_credentials")
+            #             if not api_creds:
+            #                 status_icon = "🟡 - Never Generated"
+            #             else:
+            #                 exp_ts = api_creds.get("expiration_ts")
+            #                 try:
+            #                     exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            #                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            #                     days_left = (exp_dt - datetime.now(timezone.utc)).days
+            #                     if days_left >= 0:
+            #                         status_icon = "🟢 - Active"
+            #                     else:
+            #                         status_icon = "🔴 - Expired"
+            #                 except Exception:
+            #                     pass
+
+            #         elif resp.status_code == 403:
+            #             print("❌ Access denied. Admin privileges required to fetch user details.")
+            #         elif resp.status_code == 404:
+            #             print("⚠️  User not found.")
+            #         else:
+            #             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
+
+            #     except requests.exceptions.RequestException as e:
+            #         print(f"❌ Connection error: {e}")
+            rows.append([name, email, uid, uname, login_status])
 
         # 🧱 Compute column widths dynamically
         col_widths = [max(len(str(row[i])) for row in ([headers] + rows)) for i in range(len(headers))]
@@ -138,12 +172,16 @@ def get_user_details(user_id: str, region: str):
                 print(f"\n👥 Teams ({len(teams)}):")
                 for t in teams:
                     print(f"   • {t.get('team_name')} ({t.get('relationship', {}).get('display_name', '')})")
+            else:
+                print(f"\n👥 No Team Restriction.")
 
             roles = data.get("roles", [])
             if roles:
                 print(f"\n🧩 Roles ({len(roles)}):")
                 for r in roles:
                     print(f"   • {r.get('role_description', r.get('role_name'))}")
+            else:
+                print(f"\n👥 No Role(s) assigned.")
 
             print("\n✅ User information retrieved successfully.")
         elif resp.status_code == 403:

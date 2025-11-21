@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veracli Web Shell</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Base Styling and Variables (Optimized for Application Shell) */
+        :root {
+            --primary-color: #0077B6; 
+            --primary-light: #e0f0ff;
+            --background-color: #f7f9fc;
+            --sidebar-background: #ffffff; 
+            --console-background: #1e1e1e;
+            --console-text: #f0f0f0;
+            --border-color: #e0e0e0;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --text-color: #222;
+            --light-text: #777;
+            --secondary-btn-color: #999; /* For the Clear button */
+            --secondary-btn-bg: #f0f0f0;
+            --warning-color: #ff9800;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            height: 100%; 
+            overflow: hidden; 
+        }
+
+        /* --- New Application Shell Layout (CSS Grid) --- */
+        #app-layout {
+            display: grid;
+            grid-template-areas: 
+                "header header"
+                "sidebar main"
+                "sidebar footer";
+            grid-template-columns: 350px 1fr; 
+            grid-template-rows: 60px 1fr 45px; 
+            height: 100vh;
+            max-width: 100vw;
+        }
+
+        /* --- Header / Status Bar --- */
+        #app-header {
+            grid-area: header;
+            background-color: var(--sidebar-background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #app-header h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+        #status-bar {
+            font-size: 0.85em;
+            color: var(--light-text);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--error-color); }
+        .status-dot.connected { background-color: var(--success-color); }
+        
+        /* --- Left Sidebar (Input Controls) --- */
+        #command-sidebar {
+            grid-area: sidebar;
+            background-color: var(--sidebar-background);
+            padding: 20px;
+            overflow-y: auto; 
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- Main Console Area (Center) --- */
+        #cli-container {
+            grid-area: main;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--console-background);
+            overflow: hidden; 
+        }
+
+        /* --- Console Output --- */
+        #console {
+            background-color: var(--console-background);
+            color: var(--console-text);
+            padding: 15px;
+            white-space: pre; 
+            font-family: monospace;
+            font-size: 0.85em;
+            line-height: 1.4;
+            overflow-y: scroll; 
+            overflow-x: auto; 
+            flex-grow: 1;
+            height: 100%; 
+        }
+
+        /* --- Footer Input (CLI) --- */
+        #cli-input-container {
+            grid-area: footer;
+            background-color: #333;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            border-top: 1px solid #555;
+            z-index: 10;
+        }
+        #cli-prompt { color: #b0e0a0; margin-right: 5px; font-family: monospace; font-size: 1em; }
+        #cli-input { background: none; border: none; color: var(--console-text); font-family: monospace; font-size: 1em; flex-grow: 1; outline: none; padding: 0; caret-color: var(--console-text); }
+
+
+        /* --- Styling for Collapsible Sections (The new `details` element) --- */
+        .card { 
+            padding: 0; 
+            box-shadow: none; 
+            background: none; 
+            border: 1px solid var(--border-color); /* Added border for card grouping */
+            border-radius: 6px;
+        }
+
+        details {
+            padding: 0;
+            margin: 0;
+        }
+
+        .card-title {
+            /* Now applied to the <summary> element */
+            font-weight: 600;
+            font-size: 0.95em; 
+            color: var(--primary-color);
+            padding: 10px 15px; /* Added padding to the title area */
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            list-style: none; /* Hide default triangle in some browsers */
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.15s;
+        }
+        
+        /* Style for the title bar when the section is closed */
+        details:not([open]) .card-title {
+             border-bottom: none; /* No border if closed */
+        }
+
+        /* Tweak for Firefox/Edge to hide the default triangle */
+        details > summary::-webkit-details-marker,
+        details > summary::marker {
+            display: none;
+        }
+        
+        .card-title i {
+            font-size: 1.1em;
+            color: var(--primary-color);
+            transition: transform 0.2s;
+        }
+
+        /* Rotate arrow down when open */
+        details[open] .card-title i.collapse-icon {
+            transform: rotate(90deg);
+        }
+        /* Default arrow right when closed */
+        details:not([open]) .card-title i.collapse-icon {
+            transform: rotate(0deg);
+        }
+
+        /* Content area inside the collapsible card */
+        .card-content {
+            padding: 10px 15px 15px 15px;
+        }
+
+        /* Input, buttons, segmented controls styles (inside .card-content) */
+        .input-group { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            flex-wrap: wrap; 
+            margin-bottom: 8px; /* Added space between groups */
+        }
+        
+        /* EXPANDED TEXT INPUT STYLING */
+        #app-name-input, #xml-target-input, #build-id-input, #det-xml-target-input, #det-build-id-input, #report-filename-prefix, #mit-app-name-input, #mit-file-name-input { 
+            flex-grow: 1;
+            width: 100%; 
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        
+        input[type="text"], select { 
+            padding: 7px 10px; 
+            font-size: 0.9em; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            border: 1px solid var(--border-color);
+        }
+
+        .btn { 
+            padding: 7px 10px; 
+            font-size: 0.8em; 
+            font-weight: 600; 
+            border-radius: 4px; 
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-primary { 
+            background-color: var(--primary-color); 
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background-color: #005a92;
+        }
+        .btn-outline { 
+            padding: 6px 9px; 
+            background: none;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+        .btn-outline:hover {
+            background-color: var(--primary-light);
+        }
+        
+        /* New Clear Button Style */
+        .btn-secondary {
+            background-color: var(--secondary-btn-bg);
+            color: var(--secondary-btn-color);
+            border: 1px solid #ddd;
+        }
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+        }
+
+        .segmented-control { 
+            display: flex; 
+            border: 1px solid var(--border-color); 
+            border-radius: 4px; 
+            overflow: hidden;
+        }
+        .segmented-control input[type="radio"] {
+            display: none;
+        }
+        .segmented-control label { 
+            padding: 5px 8px; 
+            font-size: 0.75em; 
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: var(--light-text);
+        }
+        .segmented-control input[type="radio"]:checked + label {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+        .segmented-control label:not(:last-child) {
+            border-right: 1px solid var(--border-color);
+        }
+
+        /* XML Build/Info Alignment Correction */
+        .xml-button-group {
+            display: flex;
+            justify-content: flex-end; /* Push buttons to the right */
+            gap: 8px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        /* TIGHTEN REPORT GENERATION SPACING */
+        #report-generation-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px; 
+        }
+        
+        /* Responsive Adjustments */
+        @media (max-width: 900px) {
+            #app-layout {
+                grid-template-areas: 
+                    "header"
+                    "sidebar"
+                    "main"
+                    "footer";
+                grid-template-columns: 1fr;
+                grid-template-rows: 60px auto 1fr 45px;
+                overflow-y: auto; 
+            }
+            #command-sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+                padding-top: 10px; /* Adjust padding for mobile */
+            }
+            .card {
+                border-left: none;
+                border-right: none;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app-layout">
+
+        <div id="app-header">
+            <h1>Veracli Web Shell</h1>
+            <div id="status-bar">
+                <span id="status-dot" class="status-dot"></span>
+                <span id="status-text">Disconnected</span>
+                
+                <button id="clear-all-btn" class="btn btn-primary" onclick="clearAll()">
+                    <i class="fas fa-redo-alt" aria-hidden="true"></i> Clear All
+                </button>
+                
+                <button id="help-btn" class="btn btn-outline" onclick="showHelp()">
+                    <i class="fas fa-question-circle" aria-hidden="true"></i> Help
+                </button>
+            </div>
+        </div>
+
+        <div id="command-sidebar">
+            
+            <details class="card" open>
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>🌐</span> API Utilities & Credentials
+                </summary>
+                <div class="card-content">
+                    <div class="input-group">
+                        <button id="check-creds-btn" class="btn btn-primary" onclick="sendCommand('check api')">
+                            <i class="fas fa-lock" aria-hidden="true"></i> API Key Expiry
+                        </button>
+                        <button id="check-creds-btn" class="btn btn-primary" onclick="sendCommand('all user')">
+                            <i class="fas fa-users" aria-hidden="true"></i> List All Users
+                        </button>
+
+                    <div><input type="text" id="user-input" placeholder="Enter User ID..."></div>
+                    <div class="input-group">
+                        <button id="user-info-rest-btn" class="btn btn-primary" onclick="runUserInfoRest()">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i> User Info
+                        </button> 
+                    </div>
+                </div>
+            </details>
+            
+            <details class="card">
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>🔍</span> Application Lookup & Reports
+                </summary>
+                <div class="card-content">
+                    <div class="input-group">
+                        <div class="segmented-control">
+                            <input type="radio" id="api_rest" name="api_type_list" value="REST" checked>
+                            <label for="api_rest">REST</label>
+                            <input type="radio" id="api_xml" name="api_type_list" value="XML">
+                            <label for="api_xml">XML</label>
+                        </div>
+
+                        <div>
+                            <button id="list-apps-btn" class="btn btn-outline" onclick="listApplications()">
+                                <i class="fas fa-list-alt" aria-hidden="true"></i> List Apps
+                            </button>
+                        </div>
+                    </div>
+
+                    <div><input type="text" id="app-name-input" placeholder="Enter App Name..."></div>
+                    <div class="input-group">
+                        <button id="app-info-rest-btn" class="btn btn-primary" onclick="runAppInfoRest()">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i> App Info
+                        </button>
+                        <button id="summary-report-btn" class="btn btn-primary" onclick="runSummaryReportRest()">
+                            <i class="fas fa-book" aria-hidden="true"></i> Summary Report
+                        </button>
+                    </div>
+                </div>
+            </details>
+
+            
+            <details class="card">
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>⚙️</span> Scan Details [XML Utility]
+                </summary>
+                <div class="card-content">
+                    <div class="input-group" style="justify-content: space-between;">
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="target_id" name="target_type" value="ID" checked>
+                            <label for="target_id">App ID</label>
+                            <input type="radio" id="target_name" name="target_type" value="Name">
+                            <label for="target_name">App Name</label>
+                        </div>
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="scan_static" name="scan_type" value="ss" checked>
+                            <label for="scan_static">Static</label>
+                            <input type="radio" id="scan_dynamic" name="scan_type" value="ds">
+                            <label for="scan_dynamic">Dynamic</label>
+                        </div>
+                    </div>
+
+                    <div><input type="text" id="xml-target-input" placeholder="Enter App ID or Name..."></div>
+
+                    <div><input type="text" id="build-id-input" placeholder="Build ID (Optional) e.g., 34534888"></div> 
+                    
+                    <div class="xml-button-group">
+                        <button id="build-list-btn" class="btn btn-outline" onclick="runXmlCommand('build_list')">
+                            <i class="fas fa-list-ul" aria-hidden="true"></i> Build List
+                        </button>
+                        <button id="build-info-btn" class="btn btn-primary" onclick="runXmlCommand('build_info')">
+                            <i class="fas fa-search" aria-hidden="true"></i> Build Info
+                        </button>
+                    </div>
+                </div>
+            </details>
+
+            <details class="card">
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>📄</span> Detail Report Generation
+                </summary>
+                <div class="card-content">
+                    <div class="input-group" style="justify-content: space-between;">
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="det_target_id" name="det_target_type" value="ID" checked>
+                            <label for="det_target_id">App ID</label>
+                            <input type="radio" id="det_target_name" name="det_target_type" value="Name">
+                            <label for="det_target_name">App Name</label>
+                        </div>
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="det_scan_static" name="det_scan_type" value="ss" checked>
+                            <label for="det_scan_static">Static</label>
+                            <input type="radio" id="det_scan_dynamic" name="det_scan_type" value="ds">
+                            <label for="det_scan_dynamic">Dynamic</label>
+                        </div>
+                    </div>
+
+                    <div><input type="text" id="det-xml-target-input" placeholder="Enter App ID or Name..."></div>
+
+                    <div><input type="text" id="det-build-id-input" placeholder="Build ID (Optional) e.g., 34534888"></div>
+
+                    <div><input type="text" id="report-filename-prefix" placeholder="File Prefix (Default: Veracode_Detailed_Report)"></div>
+
+                    <div id="report-generation-controls">
+                        <div class="segmented-control" style="width: 100px;">
+                            <input type="radio" id="format_xml" name="report_format" value="XML" checked>
+                            <label for="format_xml">XML</label>
+                            <input type="radio" id="format_pdf" name="report_format" value="PDF">
+                            <label for="format_pdf">PDF</label>
+                        </div>
+                        <button id="detailed-report-xml-btn" class="btn btn-primary" onclick="runDetailedReportXml()">
+                            <i class="fas fa-file-download" aria-hidden="true"></i> Generate & Download
+                        </button>
+                    </div>
+                </div>
+            </details>
+
+            <details class="card">
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>🛡️</span> Mitigation Review & Actions
+                </summary>
+                <div class="card-content">
+                    <div class="input-group" style="justify-content: space-between; margin-bottom: 10px;">
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="mit_target_name" name="mit_target_type" value="Name" checked>
+                            <label for="mit_target_name">App Name</label>
+                            <input type="radio" id="mit_target_id" name="mit_target_type" value="ID">
+                            <label for="mit_target_id">App ID</label>
+                        </div>
+                        <div class="segmented-control" style="width: 130px;">
+                            <input type="radio" id="mit_scan_static" name="mit_scan_type" value="ss" checked>
+                            <label for="mit_scan_static">Static</label>
+                            <input type="radio" id="mit_scan_dynamic" name="mit_scan_type" value="ds">
+                            <label for="mit_scan_dynamic">Dynamic</label>
+                        </div>
+                    </div>
+                    <div><input type="text" id="mit-app-name-input" placeholder="App Name or ID (e.g., 43786134)"></div>
+
+                    <div><input type="text" id="mit-file-name-input" placeholder="XML Detailed Report"></div>
+                    
+                    <label for="mit-severity-select" style="font-size: 0.85em; color: var(--light-text); margin-top: 5px; display: block;">Select Severity:</label>
+                    <select id="mit-severity-select" style="width: 100%; padding: 7px 10px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; margin-bottom: 10px;">
+                        <option value="High & Above">High & Above</option>
+                        <option value="High & Medium">High & Medium</option>
+                        <option value="Medium & Above">Medium & Above</option>
+                        <option value="Medium & Below">Medium & Below</option>
+                        <option value="All">All</option>
+                        <option value="Very High">Very High</option>
+                        <option value="High" selected>High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                        <option value="Very Low">Very Low</option>
+                        <option value="Info">Informational</option>
+                    </select>
+
+                    <div class="input-group" style="justify-content: flex-end; width: 100%;">
+                        <button id="review-mitigation-btn" class="btn btn-primary" style="background-color: #d9534f;" onclick="runMitigationReview()">
+                            <i class="fas fa-gavel" aria-hidden="true"></i> Review Mitigations
+                        </button>
+                    </div>
+                </div>
+            </details>
+            
+            <div style="height: 20px;"></div>
+        </div>
+        
+        <div id="cli-container">
+            <div id="console">Veracli Shell Connected. Type a command or click a button to begin.</div> 
+        </div>
+
+        <div id="cli-input-container">
+            <span id="cli-prompt">> </span>
+            <input type="text" id="cli-input" autofocus onkeydown="handleKeydown(event)">
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        const consoleOutput = document.getElementById('console');
+        const cliInput = document.getElementById('cli-input');
+        const cliPrompt = document.getElementById('cli-prompt');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        let commandHistory = [];
+        let historyIndex = -1;
+        
+        const DEFAULT_PREFIX = "Veracode_Detailed_Report"; 
+        
+        // New: Get all details elements for accordion behavior
+        const detailsElements = document.querySelectorAll('#command-sidebar details');
+
+
+        // --- New: Accordion Behavior Listener ---
+        function setupAccordion() {
+            detailsElements.forEach(details => {
+                // Ensure only the first one is open initially, remove 'open' from all others
+                if (details !== detailsElements[0]) {
+                    details.removeAttribute('open');
+                }
+
+                // Add event listener to each details summary (when it's clicked)
+                details.addEventListener('toggle', (event) => {
+                    // Check if the current details element is being opened
+                    if (event.target.open) {
+                        // Collapse all other details elements
+                        detailsElements.forEach(otherDetails => {
+                            if (otherDetails !== event.target) {
+                                otherDetails.removeAttribute('open');
+                            }
+                        });
+                    }
+                });
+            });
+        }
+        
+        // --- Console Message Handling (Replaces alert/confirm and adds success/warning colors) ---
+        function displayMessage(message, type = 'system') {
+            const color = type === 'user' ? '#b0e0a0' : 
+                          type === 'system' ? 'var(--primary-color)' : 
+                          type === 'success' ? 'var(--success-color)' : 
+                          type === 'warning' ? 'var(--warning-color)' : 
+                          'var(--error-color)';
+            consoleOutput.innerHTML += `<span style="color: ${color};">${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        // --- File Download Utility ---
+        function downloadFile(content, fileName, mimeType) {
+            try {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                displayMessage(`❌ Error during download: ${error.message}`, 'error');
+            }
+        }
+
+
+        // --- SocketIO Handlers ---
+        socket.on('connect', () => {
+            console.log('Socket connected.');
+            statusDot.classList.add('connected');
+            statusText.textContent = 'Connected (Ready to accept commands)';
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Socket disconnected.');
+            statusDot.classList.remove('connected');
+            statusText.textContent = 'Disconnected';
+            cliPrompt.textContent = 'OFFLINE: ';
+        });
+
+        socket.on('cli_output', (data) => {
+            consoleOutput.innerHTML += data.data;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        });
+
+        socket.on('cli_prompt', (data) => {
+            cliPrompt.textContent = data.data;
+            cliInput.disabled = false;
+            cliInput.focus();
+        });
+
+        socket.on('cli_clear_prompt', () => {
+            cliInput.value = '';
+            cliInput.disabled = true;
+        });
+        
+        // --- File Download Handler (Simulates browser prompt/confirmation) ---
+        socket.on('file_download', (data) => {
+            if (data && data.content && data.filename) {
+                const mimeType = data.mimeType || 'application/octet-stream';
+                
+                // 1. Display prompt message in console
+                displayMessage(`\n📥 File ready for download: ${data.filename}`, 'warning');
+                displayMessage(`   Mime Type: ${mimeType}`, 'warning');
+                displayMessage(`   Triggering browser download... (Check your browser's download bar)`, 'warning');
+
+                // 2. Trigger actual download
+                downloadFile(data.content, data.filename, mimeType);
+                
+                displayMessage(`\n✅ Download started successfully!`, 'success');
+            } else {
+                displayMessage("❌ Error: Server did not return valid file content for download.", 'error');
+            }
+        });
+
+
+        // --- Command Execution Logic ---
+        function sendCommand(cmd) {
+            if (!cmd.trim() || cliInput.disabled) return;
+            
+            consoleOutput.innerHTML += `<span style="color: ${cliPrompt.style.color || '#b0e0a0'}">${cliPrompt.textContent}</span>${cmd}\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+
+            if (commandHistory.length === 0 || commandHistory[0] !== cmd) {
+                commandHistory.unshift(cmd);
+            }
+            historyIndex = -1;
+            
+            socket.emit('command', { cmd: cmd });
+        }
+        
+        function handleKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendCommand(cliInput.value);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    cliInput.value = commandHistory[historyIndex];
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    cliInput.value = commandHistory[historyIndex];
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    cliInput.value = '';
+                }
+            }
+        }
+
+        // --- Clear/Reset Function ---
+        function clearAll() {
+            // 1. Clear Console Output
+            consoleOutput.innerHTML = 'Console cleared. Veracli Shell Connected. Type a command or click a button to begin.';
+            
+            // 2. Clear all Text Inputs
+            document.getElementById('user-input').value = '';
+            document.getElementById('app-name-input').value = '';
+            document.getElementById('xml-target-input').value = '';
+            document.getElementById('det-build-id-input').value = '';
+            document.getElementById('det-xml-target-input').value = '';
+            document.getElementById('build-id-input').value = '';
+            document.getElementById('report-filename-prefix').value = ''; 
+            document.getElementById('mit-file-name-input').value = '';
+            document.getElementById('mit-app-name-input').value = ''; // Clear mitigation app name
+            cliInput.value = '';
+            
+            // 3. Reset history index and focus
+            commandHistory = [];
+            historyIndex = -1;
+            cliInput.focus();
+        }
+
+
+        // --- Button Command Builders ---
+        function runUserInfoRest() {
+            const userId = document.getElementById('user-input').value.trim();
+            if (userId) {
+                sendCommand(`veracli api_check -u ${userId}`);
+            } else {
+                displayMessage("⚠️ Please enter a User ID.", 'error');
+            }
+        }
+
+        function listApplications() {
+            const apiType = document.querySelector('input[name="api_type_list"]:checked').value;
+            sendCommand(`list app --api_type ${apiType}`);
+        }
+
+        function runAppInfoRest() {
+            const appName = document.getElementById('app-name-input').value.trim();
+            if (appName) {
+                sendCommand(`veracli app_info -n "${appName}" -t REST`);
+            } else {
+                displayMessage("⚠️ Please enter an Application Name.", 'error');
+            }
+        }
+
+        function runSummaryReportRest() {
+            const appName = document.getElementById('app-name-input').value.trim();
+            if (appName) {
+                sendCommand(`veracli summary_report -n "${appName}" -t REST`);
+            } else {
+                displayMessage("⚠️ Please enter an Application Name.", 'error');
+            }
+        }
+
+        // --- Mitigation Review Function (UPDATED) ---
+        function runMitigationReview() {
+            const appValue = document.getElementById('mit-app-name-input').value.trim();
+            const fileValue = document.getElementById('mit-file-name-input').value.trim();
+            const severity = document.getElementById('mit-severity-select').value;
+            // NEW: Get the selected mode (Name or ID)
+            const targetType = document.querySelector('input[name="mit_target_type"]:checked').value; 
+            const scanType = document.querySelector('input[name="mit_scan_type"]:checked').value; 
+
+            if (!appValue) {
+                if (!fileValue) {
+                    displayMessage(`⚠️ Please enter an Application ${targetType} or XML File for mitigation review.`, 'error');
+                    return;
+                }
+            }
+
+            let cmd = '';
+
+            if (appValue) {
+                // Determine the flag to use: -i for ID, -n for Name
+                const flag = (targetType === 'ID') ? '-i' : '-n';
+                
+                // Command format: veracli review_mitigation (-n | -i) "<app_value>" -S "<Severity>"
+                cmd = `veracli review_mitigation ${flag} "${appValue}" -S "${severity}"`;
+                
+                displayMessage(`\n⏳ Requesting mitigation review for app ${targetType}=${appValue} (Severity: ${severity})...`, 'system');
+                
+                // Only append scan type if the command is NOT 'static'
+                if (scanType !== 'ss') {
+                    cmd += ` -s ${scanType}`;
+                }
+                sendCommand(cmd);
+            }
+            else if (fileValue) {
+                if (fileValue.slice(-3).toLowerCase() === 'xml') {
+                    cmd = `veracli review_mitigation -f "${fileValue}" -S "${severity}"`;
+                    
+                    displayMessage(`\n⏳ Requesting mitigation review for file ${fileValue} (Severity: ${severity})...`, 'system');
+
+                    // Only append scan type if the command is NOT 'static'
+                    if (scanType !== 'ss') {
+                        cmd += ` -s ${scanType}`;
+                    }
+                    sendCommand(cmd);
+                }
+                else {
+                    displayMessage(`⚠️ Please enter an XML File for mitigation review.`, 'error');
+                    return;
+                }
+            }
+        }
+        // -------------------------------------
+
+        function runXmlCommand(commandType) {
+            const targetType = document.querySelector('input[name="target_type"]:checked').value;
+            const targetValue = document.getElementById('xml-target-input').value.trim();
+            
+            const scanType = document.querySelector('input[name="scan_type"]:checked').value; 
+            const buildId = document.getElementById('build-id-input').value.trim();
+            
+            if (!targetValue) {
+                displayMessage(`⚠️ Please enter the Application ${targetType}.`, 'error');
+                return;
+            }
+
+            let cmd = `veracli ${commandType}`;
+            
+            if (targetType === 'ID') {
+                cmd += ` -i ${targetValue}`;
+            } else {
+                cmd += ` -n "${targetValue}"`;
+            }
+
+            // Only append scan type if the command is NOT 'build_list'
+            if (commandType !== 'build_list') {
+                cmd += ` -s ${scanType}`;
+            }
+            
+            // Prepend '-b' to the build ID if it exists
+            if (buildId) {
+                cmd += ` -b ${buildId}`; 
+            }
+
+            sendCommand(cmd);
+        }
+
+        function runDetailedReportXml() {
+            const targetType = document.querySelector('input[name="det_target_type"]:checked').value;
+            const targetValue = document.getElementById('det-xml-target-input').value.trim();
+
+            const scanType = document.querySelector('input[name="det_scan_type"]:checked').value; 
+            const buildId = document.getElementById('det-build-id-input').value.trim();
+
+            const format = document.querySelector('input[name="report_format"]:checked').value;
+            let prefix = document.getElementById('report-filename-prefix').value.trim();
+
+            if (!targetValue) {
+                displayMessage(`⚠️ Please enter the Application ${targetType} for the Detailed Report.`, 'error');
+                return;
+            }
+
+            // Set default prefix if none is provided
+            if (!prefix) {
+                prefix = DEFAULT_PREFIX;
+                displayMessage(`ℹ️ No file prefix provided. Using default: "${prefix}"`, 'system');
+            }
+
+            let cmd = `veracli detailed_report`;
+            
+            if (targetType === 'ID') {
+                cmd += ` -i ${targetValue}`; 
+            } else {
+                cmd += ` -n "${targetValue}"`;
+            }
+
+            // Only append scan type if the type is NOT 'static'
+            if (scanType !== 'ss') {
+                cmd += ` -s ${scanType}`;
+            }
+            
+            // Prepend '-b' to the build ID if it exists
+            if (buildId) {
+                cmd += ` -b ${buildId}`; 
+            }
+
+            // Add format (-f) and output prefix (-p) flags
+            cmd += ` -f ${format} -p ${prefix}`; 
+            
+            // Send the command to the server
+            sendCommand(cmd);
+            
+            displayMessage(`\n⏳ Requesting Detailed Report (Format: ${format}, Prefix: "${prefix}") from server...`, 'system');
+            displayMessage(`   **The server must send the file content back via the 'file_download' event.**`, 'system');
+        }
+
+        function showHelp() {
+            consoleOutput.innerHTML += '\n' +
+                '<span style="color: var(--primary-color);">--- HELP ---</span>\n' +
+                '1. API Utilities: Check Creds or List Apps (select XML/REST first).\n' +
+                '2. REST Lookup: Enter App Name/ID and click App Info or Summary Report.\n' +
+                '3. XML Commands: Fill App ID/Name, select Scan Type, optionally Build ID, then click Build List/Info.\n' +
+                '4. XML Reports: Use the App ID/Name field, select **Format** (XML/PDF), optionally set a **Prefix**, and click **Generate & Download**.\n' +
+                '5. Mitigation Review: Enter App Name/ID, **select ID/Name mode**, choose **Severity**, and click **Review Mitigations**.\n' +
+                '6. Direct Command: Type any Veracli command in the prompt below.\n' +
+                '--------------------\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            cliInput.focus();
+        }
+
+        // Initialize focus and accordion behavior
+        window.onload = () => {
+            cliInput.focus();
+            setupAccordion();
+        };
+
+    </script>
+</body>
+</html>
