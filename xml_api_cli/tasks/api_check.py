@@ -22,6 +22,15 @@ def setup_parser(parser: argparse.ArgumentParser):
         "-u", "--user",
         help="Fetch user details by user ID or 'all' for list (optional). Admin only."
     )
+    parser.add_argument(
+        "-s", "--search",
+         choices=["name", "email", "api_id"],
+        help="Search users by Username, Email ID, API ID, etc. Admin only."
+    )
+    parser.add_argument(
+        "-v", "--value",
+        help="Search value"
+    )
 
 # ----------------------------------------------------------------------
 # 🧩 Function: Fetch all users (paginated, tabular)
@@ -153,7 +162,7 @@ def get_user_details(user_id: str, region: str):
                 print("\n⚠️  API Credentials were never generated for this user.")
             else:
                 print("\n🔐 API Credential Details:")
-                print(f"   🆔 API ID: {api_creds.get('api_id')}")
+                print(f"   🆔 API ID: {api_creds.get('api_id')[:4]}{'*' * (len(api_creds.get('api_id'))//2 - 4)}{api_creds.get('api_id')[len(api_creds.get('api_id'))//2:]}")
                 exp_ts = api_creds.get("expiration_ts")
                 print(f"   📅 Expiration: {exp_ts}")
                 try:
@@ -195,6 +204,89 @@ def get_user_details(user_id: str, region: str):
         print(f"❌ Connection error: {e}")
 
 # ----------------------------------------------------------------------
+# 🧩 Function: Search User
+# ----------------------------------------------------------------------
+def get_user_by_search(search_id: str, search_val: str, region: str):
+    """
+    Search User by Username, Email Address or API ID.
+    """
+    if search_id == "name":
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users?user_name={search_val}"
+    elif search_id == "email":
+        encoded_email = search_val.replace("@", "%40")
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users?email_address={encoded_email}"
+    elif search_id == "api_id":
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users/search?api_id={search_val}"
+
+    params = {"size": 300, "page": 0}
+    total_users = []
+    print("📡 Searching all users...")
+
+    try:
+        while True:
+            resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            if resp.status_code != 200:
+                print(f"⚠️  Failed to fetch users (HTTP {resp.status_code}): {resp.text}")
+                break
+
+            data = resp.json()
+            users = data.get("_embedded", {}).get("users", [])
+            if not users:
+                break
+            total_users.extend(users)
+
+            # 🧾 Pagination info
+            page_info = data.get("page", {})
+            current_page = page_info.get("number", 0)
+            total_pages = page_info.get("total_pages", 1)
+
+            print(f"📄 Processed page {current_page + 1}/{total_pages} ({len(users)} users)")
+
+            # Exit if this was the last page
+            if current_page >= total_pages - 1:
+                break
+
+            params["page"] = current_page + 1  # move to next page
+
+        # 🧮 Prepare table
+        if not total_users:
+            print("⚠️  No users found.")
+            return
+
+        headers = ["User Status", "Name", "Email", "User ID", "Username", "Login Enabled"]
+        rows = []
+        for u in total_users:
+            status_icon = "🟢" if u.get("active") else "🔴"
+            name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+            email = u.get("email_address", "")
+            uid = u.get("user_id", "")
+            uname = u.get("user_name", "")
+            login_status = "✅" if u.get("login_enabled") else "❌"
+            rows.append([status_icon, name, email, uid, uname, login_status])
+
+        if search_id == "api_id":
+            get_user_details(uid, region)
+        else:
+        # 🧱 Compute column widths dynamically
+            col_widths = [max(len(str(row[i])) for row in ([headers] + rows)) for i in range(len(headers))]
+
+            # 🪶 Print table
+            print("\n" + " | ".join(headers[i].ljust(col_widths[i]) for i in range(len(headers))))
+            print("-" * (sum(col_widths) + (3 * (len(headers) - 1))))
+
+            for row in rows:
+                print(" | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(headers))))
+
+            print(f"\n✅ Retrieved total {len(total_users)} users across {page_info.get('total_pages', 1)} page(s).")
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Connection error: {e}")
+
+
+# ----------------------------------------------------------------------
 # 🎯 Main Function
 # ----------------------------------------------------------------------
 def run(args=None):
@@ -203,6 +295,9 @@ def run(args=None):
             list_all_users(args.region)
         else:
             get_user_details(args.user, args.region)
+    elif args.search:
+        # Added logic for Unified search
+        get_user_by_search(args.search, args.value, args.region)
     else:
         cred_file = os.path.expanduser("~/.veracode/credentials")
 

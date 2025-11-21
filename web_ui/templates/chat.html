@@ -357,6 +357,23 @@
                             <i class="fas fa-info-circle" aria-hidden="true"></i> User Info
                         </button> 
                     </div>
+
+                    <div class="segmented-control">
+                        <input type="radio" id="api_name" name="search_type_list" value="name" checked>
+                        <label for="api_name">User Name</label>
+                        <input type="radio" id="api_email" name="search_type_list" value="email">
+                        <label for="api_email">E-mail</label>
+                        <input type="radio" id="api_id" name="search_type_list" value="api_id">
+                        <label for="api_id">API ID</label>
+                    </div>
+
+                    <div><input type="text" id="search-input" placeholder="Seach Value..."></div>
+
+                    <div class="input-group">
+                        <button id="user-search-rest-btn" class="btn btn-primary" onclick="runUserSearchRest()">
+                            <i class="fas fa-search" aria-hidden="true"></i> User Search
+                        </button> 
+                    </div>
                 </div>
             </details>
             
@@ -547,6 +564,32 @@
         
         // New: Get all details elements for accordion behavior
         const detailsElements = document.querySelectorAll('#command-sidebar details');
+        
+        // --- NEW: Button State Management Functions ---
+        // Disables all primary action buttons and the CLI input
+        function disableButtons() {
+            // Select all buttons used for sending commands
+            const commandButtons = document.querySelectorAll('.card-content .btn-primary, .card-content .btn-outline, #clear-all-btn, #help-btn');
+            commandButtons.forEach(button => {
+                button.disabled = true;
+                button.style.opacity = '0.5'; // Optional: Visual feedback
+            });
+            cliInput.disabled = true;
+            statusText.textContent = 'Executing command... (Please Wait)';
+        }
+
+        // Enables all primary action buttons and the CLI input
+        function enableButtons() {
+            const commandButtons = document.querySelectorAll('.card-content .btn-primary, .card-content .btn-outline, #clear-all-btn, #help-btn');
+            commandButtons.forEach(button => {
+                button.disabled = false;
+                button.style.opacity = '1';
+            });
+            // Re-enable the CLI input is handled by cli_prompt, but restore status text here
+            statusText.textContent = statusDot.classList.contains('connected') ? 'Connected (Ready to accept commands)' : 'Disconnected';
+            cliInput.focus();
+        }
+        // ---------------------------------------------
 
 
         // --- New: Accordion Behavior Listener ---
@@ -609,6 +652,8 @@
             console.log('Socket connected.');
             statusDot.classList.add('connected');
             statusText.textContent = 'Connected (Ready to accept commands)';
+            // Ensure buttons are enabled on connect
+            enableButtons();
         });
 
         socket.on('disconnect', () => {
@@ -616,6 +661,8 @@
             statusDot.classList.remove('connected');
             statusText.textContent = 'Disconnected';
             cliPrompt.textContent = 'OFFLINE: ';
+            // Re-enable buttons on disconnect so the user can see the UI is not frozen
+            enableButtons(); 
         });
 
         socket.on('cli_output', (data) => {
@@ -627,6 +674,8 @@
             cliPrompt.textContent = data.data;
             cliInput.disabled = false;
             cliInput.focus();
+            // Command complete, re-enable sidebar buttons
+            enableButtons();
         });
 
         socket.on('cli_clear_prompt', () => {
@@ -648,8 +697,12 @@
                 downloadFile(data.content, data.filename, mimeType);
                 
                 displayMessage(`\n✅ Download started successfully!`, 'success');
+                // Download operation complete, re-enable buttons
+                enableButtons(); 
             } else {
                 displayMessage("❌ Error: Server did not return valid file content for download.", 'error');
+                // Operation failed, re-enable buttons
+                enableButtons(); 
             }
         });
 
@@ -658,6 +711,9 @@
         function sendCommand(cmd) {
             if (!cmd.trim() || cliInput.disabled) return;
             
+            // Disable buttons immediately upon sending command
+            disableButtons(); 
+
             consoleOutput.innerHTML += `<span style="color: ${cliPrompt.style.color || '#b0e0a0'}">${cliPrompt.textContent}</span>${cmd}\n`;
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
 
@@ -698,11 +754,12 @@
             
             // 2. Clear all Text Inputs
             document.getElementById('user-input').value = '';
+            document.getElementById('search-input').value = '';
             document.getElementById('app-name-input').value = '';
             document.getElementById('xml-target-input').value = '';
+            document.getElementById('build-id-input').value = '';
             document.getElementById('det-build-id-input').value = '';
             document.getElementById('det-xml-target-input').value = '';
-            document.getElementById('build-id-input').value = '';
             document.getElementById('report-filename-prefix').value = ''; 
             document.getElementById('mit-file-name-input').value = '';
             document.getElementById('mit-app-name-input').value = ''; // Clear mitigation app name
@@ -712,6 +769,9 @@
             commandHistory = [];
             historyIndex = -1;
             cliInput.focus();
+            
+            // Note: Since clearAll is a quick local operation, we don't need to disable/enable buttons here, 
+            // but if a command was running, it would be a problem. We will keep it simple and assume clearAll is always fast.
         }
 
 
@@ -723,6 +783,18 @@
             } else {
                 displayMessage("⚠️ Please enter a User ID.", 'error');
             }
+            document.getElementById('user-input').value = '';
+        }
+
+        function runUserSearchRest() {
+            const searchId = document.getElementById('search-input').value.trim();
+            const searchType = document.querySelector('input[name="search_type_list"]:checked').value;
+            if (searchId) {
+                sendCommand(`veracli api_check -s ${searchType} -v ${searchId}`);
+            } else {
+                displayMessage("⚠️ Please enter a Search string.", 'error');
+            }
+            document.getElementById('search-input').value = '';
         }
 
         function listApplications() {
@@ -737,6 +809,7 @@
             } else {
                 displayMessage("⚠️ Please enter an Application Name.", 'error');
             }
+            document.getElementById('app-name-input').value = '';
         }
 
         function runSummaryReportRest() {
@@ -746,6 +819,7 @@
             } else {
                 displayMessage("⚠️ Please enter an Application Name.", 'error');
             }
+            document.getElementById('app-name-input').value = '';
         }
 
         // --- Mitigation Review Function (UPDATED) ---
@@ -798,6 +872,9 @@
                     return;
                 }
             }
+            document.getElementById('report-filename-prefix').value = ''; 
+            document.getElementById('mit-file-name-input').value = '';
+            document.getElementById('mit-app-name-input').value = '';
         }
         // -------------------------------------
 
@@ -830,8 +907,9 @@
             if (buildId) {
                 cmd += ` -b ${buildId}`; 
             }
-
             sendCommand(cmd);
+            document.getElementById('xml-target-input').value = '';
+            document.getElementById('build-id-input').value = '';
         }
 
         function runDetailedReportXml() {
@@ -845,8 +923,10 @@
             let prefix = document.getElementById('report-filename-prefix').value.trim();
 
             if (!targetValue) {
-                displayMessage(`⚠️ Please enter the Application ${targetType} for the Detailed Report.`, 'error');
-                return;
+                if (!buildId) {
+                    displayMessage(`⚠️ Please enter the Application ${targetType} or Build ID for the Detailed Report.`, 'error');
+                    return;
+                }
             }
 
             // Set default prefix if none is provided
@@ -857,20 +937,23 @@
 
             let cmd = `veracli detailed_report`;
             
-            if (targetType === 'ID') {
-                cmd += ` -i ${targetValue}`; 
-            } else {
-                cmd += ` -n "${targetValue}"`;
-            }
+            if (!buildId) {
+                if (targetType === 'ID') {
+                    cmd += ` -i ${targetValue}`; 
+                } else {
+                    cmd += ` -n "${targetValue}"`;
+                }
 
-            // Only append scan type if the type is NOT 'static'
-            if (scanType !== 'ss') {
-                cmd += ` -s ${scanType}`;
+                // Only append scan type if the type is NOT 'static'
+                if (scanType !== 'ss') {
+                    cmd += ` -s ${scanType}`;
+                }
             }
-            
-            // Prepend '-b' to the build ID if it exists
-            if (buildId) {
-                cmd += ` -b ${buildId}`; 
+            else {
+                // Prepend '-b' to the build ID if it exists
+                if (buildId) {
+                    cmd += ` -b ${buildId}`; 
+                }
             }
 
             // Add format (-f) and output prefix (-p) flags
@@ -881,6 +964,8 @@
             
             displayMessage(`\n⏳ Requesting Detailed Report (Format: ${format}, Prefix: "${prefix}") from server...`, 'system');
             displayMessage(`   **The server must send the file content back via the 'file_download' event.**`, 'system');
+            document.getElementById('det-build-id-input').value = '';
+            document.getElementById('det-xml-target-input').value = '';
         }
 
         function showHelp() {

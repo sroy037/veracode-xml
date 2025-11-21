@@ -10,6 +10,7 @@ HELP_TEXT = "🧮 Fetch detailed report (XML/PDF) for a specific app/build."
 def setup_parser(parser):
     parser.add_argument("-i", "--app_id", help="Veracode App ID (required if --app_name not used)")
     parser.add_argument("-n", "--app_name", help="Veracode App Name (required if --app_id not used)")
+    parser.add_argument("-b", "--build_id", help="Specific build ID (optional)")
     parser.add_argument("-f", "--format", choices=["XML", "PDF"], required=True, help="Report format")
     parser.add_argument("-s", "--scan_type", choices=["ss", "ds"], default="ss", help="Scan type (ss=Static, ds=Dynamic)")
     parser.add_argument("-r", "--region", choices=["us","eu","us_fed"], default="us", help="Region for API requests")
@@ -48,20 +49,22 @@ def run(args):
 
     # Determine app_id
     app_id = args.app_id
+    build_id = args.build_id
     if not app_id and args.app_name:
         print(f"Resolving app_id for app_name='{args.app_name}' ...")
         app_id = find_app_id_by_name(args.app_name)
-
-    if not app_id:
-        print("❌ Please provide a valid app_id or app_name.")
-        return
-
-    # Fetch build_id
-    print(f"Fetching latest build for app_id={app_id} (scan_type={args.scan_type or 'ss'}) ...")
-    build_id = get_latest_build_id(app_id, args.scan_type)
-
+   
     if not build_id:
-        print("❌ No valid build found for the specified scan type. Exiting.")
+        # Fetch Latest build_id
+        print(f"Fetching latest build for app_id={app_id} (scan_type={args.scan_type or 'ss'}) ...")
+        build_id = get_latest_build_id(app_id, args.scan_type)
+
+        if not build_id:
+            print("❌ No valid build found for the specified scan type. Exiting.")
+            return
+
+    if not app_id and not build_id:
+        print("❌ Please provide a valid app_id or app_name.")
         return
 
     # Fetch report
