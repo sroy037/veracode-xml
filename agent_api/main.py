@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from typing import Any, Tuple, List, Dict
+from typing import Any, Tuple, List, Dict, Optional
 import subprocess
 import re
 import os
@@ -22,6 +22,8 @@ def version():
 
 class Query(BaseModel):
     query: str
+    # Optional per-request credentials forwarded from the web UI server
+    credentials: Optional[Dict[str, str]] = None
 
 # --- Helper Functions (Command Building) ---
 
@@ -214,7 +216,7 @@ def build_command(query: str, app_id: str = None, app_name: str = None, region: 
 
 # --- Core CLI Execution ---
 
-def run_veracli(command_list: list[str] | str) -> dict[str, Any]:
+def run_veracli(command_list: list[str] | str, env_overrides: Optional[Dict[str, str]] = None) -> dict[str, Any]:
     """
     Executes the command list, either a direct 'veracli' command or an internal helper script.
     """
@@ -278,13 +280,31 @@ def run_veracli(command_list: list[str] | str) -> dict[str, Any]:
         full_cmd.insert(0, "veracli")
     
     try:
+        # Prepare environment for subprocess: merge current env with any overrides provided
+        env_for_proc = os.environ.copy()
+        if env_overrides:
+            # Only accept string values
+            # Normalize region key: if caller provided 'REGION' or 'region', map it
+            # to the library-expected env var 'VERACODE_REGION' so defaults are
+            # applied correctly by xml_api_cli.config.DEFAULT_REGION.
+            region_val = None
+            for k, v in env_overrides.items():
+                if str(k).lower() == 'region' and v:
+                    region_val = str(v)
+                    break
+
+            for k, v in env_overrides.items():
+                env_for_proc[str(k)] = str(v)
+
+            if region_val and 'VERACODE_REGION' not in env_for_proc:
+                env_for_proc['VERACODE_REGION'] = region_val
+
         proc = subprocess.Popen(
             full_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            # Prevent environment variable inheritance issues
-            env=os.environ.copy()
+            env=env_for_proc
         )
         stdout, stderr = proc.communicate(timeout=60)
 
@@ -318,13 +338,77 @@ def run_veracli(command_list: list[str] | str) -> dict[str, Any]:
 async def query_agent(body: Query):
     nl_query = body.query
 
-    # --- CRITICAL FIX: Bypass build_command for internal agent commands ---
-    if nl_query.strip().lower().startswith("retrieve_agent_file"):
-        cli_cmd_input = shlex.split(nl_query)
-    else:
-        cli_cmd_input = build_command(nl_query)
+    # --- Decide whether to treat the incoming query as an already-formed CLI
+    # invocation or as natural language that needs mapping via `build_command`.
+    # We only bypass `build_command` when the query clearly looks like a
+    # veracli CLI invocation (e.g., starts with 'veracli' or a known
+    # subcommand like 'app_list', 'app_info', etc.). This avoids misclassifying
+    # natural language inputs that merely contain flags (for example
+    # 'list app --api_type REST').
+    lower_q = nl_query.strip().lower()
+    tokens = shlex.split(nl_query)
+    first_token = tokens[0].lower() if tokens else ""
 
-    result = run_veracli(cli_cmd_input)
+    KNOWN_SUBCOMMANDS = {
+        'api_check', 'app_list', 'app_info', 'build_list', 'build_info',
+        'detailed_report', 'summary_report', 'review_mitigation', 'app_info_ui_helper'
+    }
+
+    if lower_q.startswith("retrieve_agent_file"):
+        cli_cmd_input = tokens
+    elif first_token in KNOWN_SUBCOMMANDS:
+        # Already a CLI-style invocation of known top-level subcommand; preserve explicit flags/values
+        cli_cmd_input = tokens
+    else:
+        # Natural language or ambiguous input — run through build_command.
+        # Extract explicit region from the query (if present) or from forwarded
+        # credentials, and pass it to build_command so it doesn't default to 'us'.
+        region_candidate = None
+        try:
+            q_tokens = tokens
+            if '--region' in q_tokens:
+                idx = q_tokens.index('--region')
+                if idx + 1 < len(q_tokens):
+                    region_candidate = q_tokens[idx + 1]
+            elif '-r' in q_tokens:
+                idx = q_tokens.index('-r')
+                if idx + 1 < len(q_tokens):
+                    region_candidate = q_tokens[idx + 1]
+        except Exception:
+            region_candidate = None
+
+        # Fallback to credentials-provided region (case-insensitive) if available
+        if not region_candidate and body.credentials:
+            for k, v in body.credentials.items():
+                if k.lower() == 'region' and v:
+                    region_candidate = v.strip()
+                    break
+
+        # If the user explicitly prefixed with 'veracli', still run through
+        # build_command so name-based lookups ("-n <name>") are routed to the
+        # helper implementation which produces structured JSON.
+        cli_cmd_input = build_command(nl_query, region=(region_candidate or "us"))
+
+    # Normalize env_overrides: start with forwarded credentials (if any)
+    env_overrides_to_pass = dict(body.credentials) if body.credentials else {}
+
+    # If the CLI tokens include an explicit region flag, ensure the subprocess
+    # environment also gets VERACODE_REGION so library defaults align.
+    try:
+        token_list = cli_cmd_input if isinstance(cli_cmd_input, list) else shlex.split(' '.join(cli_cmd_input))
+        if '--region' in token_list:
+            idx = token_list.index('--region')
+            if idx + 1 < len(token_list):
+                env_overrides_to_pass['REGION'] = token_list[idx + 1]
+        elif '-r' in token_list:
+            idx = token_list.index('-r')
+            if idx + 1 < len(token_list):
+                env_overrides_to_pass['REGION'] = token_list[idx + 1]
+    except Exception:
+        pass
+
+    # Pass per-request credentials (if any) into the execution environment
+    result = run_veracli(cli_cmd_input, env_overrides=env_overrides_to_pass)
     
     if result.get("exit_code") != 0:
         return result

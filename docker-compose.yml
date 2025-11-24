@@ -5,11 +5,11 @@ services:
     build: 
       context: . 
     container_name: veracli_agent
-    command: ["python", "agent/server/app.py"] 
+    restart: always # ADDED: Ensures it restarts if it exits again
+    command: ["sleep", "infinity"] # CHANGED: Forces the container to stay alive
     ports:
       - "8001:8001"
     volumes:
-      # Credentials mounted, though likely unused by agent/server.py
       - ~/.veracode/credentials:/root/.veracode/credentials:ro
     networks:
       - veranet
@@ -25,7 +25,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # CRITICAL: This service executes veracli and requires credentials.
       - ~/.veracode/credentials:/root/.veracode/credentials:ro
     depends_on:
       - agent
@@ -43,7 +42,6 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Credentials mounted, though likely unused by the web UI server.
       - ~/.veracode/credentials:/root/.veracode/credentials:ro
     depends_on:
       - agent_api

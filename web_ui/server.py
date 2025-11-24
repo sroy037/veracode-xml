@@ -10,6 +10,7 @@ from typing import Optional, Any, Dict
 from flask import Flask, render_template, request # pyright: ignore[reportMissingImports]
 from flask_socketio import SocketIO, emit, join_room, leave_room # pyright: ignore[reportMissingModuleSource]
 import requests
+from pathlib import Path
 
 # --- Configuration ---
 app = Flask(__name__)
@@ -19,7 +20,15 @@ app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 socketio = SocketIO(app, cors_allowed_origins="*") 
 
 AGENT_API_URL = os.getenv("AGENT_API_URL", "http://localhost:8000/run")
-DEFAULT_REGION = "us" 
+REGION_MAP = {
+    "commercial": "us",
+    "european": "eu",
+    # Accept direct CLI-style region tokens from the UI as well
+    "us": "us",
+    "eu": "eu",
+    "us_fed": "us_fed",
+}
+DEFAULT_REGION_CLI_ARG = "us"
 
 # --- Global State Management for Multi-Match and File Download ---
 # Stores interactive context per session ID (sid).
@@ -75,6 +84,70 @@ def parse_optional_args(query: str) -> str:
         print(f"Error parsing optional arguments: {e}", file=sys.stderr)
         return ""
 
+
+# --- Environment credential helpers ---
+def find_environment_files():
+    """Return a list of (name, path) for credential files found in project .veracode and user ~/.veracode."""
+    envs = {}
+    project_dir = os.getcwd()
+    search_paths = [
+        Path(project_dir) / ".veracode",
+        Path.home() / ".veracode",
+    ]
+
+    for sp in search_paths:
+        if sp.exists() and sp.is_dir():
+            for f in sp.glob('*.credentials'):
+                # Skip example files that ship with the repo
+                if f.name.lower() == 'example.credentials':
+                    continue
+                envs[f.stem] = str(f)
+
+    return envs
+
+
+def load_env_credentials(env_name: Optional[str]):
+    """
+    Load dotenv-style credentials from .veracode files.
+    If env_name is provided, look for `.veracode/{env_name}.credentials` or `~/.veracode/{env_name}.credentials`.
+    If env_name is None, fallback to `.veracode/credentials` and `~/.veracode/credentials`.
+    Returns a tuple (creds_dict, path) where path is the file used or None.
+    """
+    candidates = []
+    project_dir = os.getcwd()
+    if env_name:
+        candidates = [
+            Path(project_dir) / ".veracode" / f"{env_name}.credentials",
+            Path.home() / ".veracode" / f"{env_name}.credentials",
+        ]
+    else:
+        candidates = [
+            Path(project_dir) / ".veracode" / "credentials",
+            Path.home() / ".veracode" / "credentials",
+        ]
+
+    for c in candidates:
+        if c.exists() and c.is_file():
+            creds = {}
+            try:
+                with c.open('r', encoding='utf-8') as fh:
+                    for raw in fh:
+                        line = raw.strip()
+                        if not line or line.startswith('#'):
+                            continue
+                        if '=' not in line:
+                            continue
+                        k, v = line.split('=', 1)
+                        k = k.strip()
+                        v = v.strip().strip('"')
+                        creds[k] = v
+                return creds, str(c)
+            except Exception as e:
+                print(f"Error reading credentials file {c}: {e}", file=sys.stderr)
+                return {}, None
+
+    return {}, None
+
 # --- Helper Functions for File Download (UPDATED) ---
 
 def extract_detailed_report_path(agent_output: str) -> Optional[str]:
@@ -102,7 +175,7 @@ def extract_detailed_report_path(agent_output: str) -> Optional[str]:
         
     return None
 
-def _execute_agent_file_retrieval(agent_path: str):
+def _execute_agent_file_retrieval(agent_path: str, env_name: Optional[str] = None, use_default: bool = False):
     """
     Executes a command on the remote agent to retrieve the file's raw content.
     Returns the file content string (expected to be base64 if binary) or raises an exception.
@@ -114,7 +187,18 @@ def _execute_agent_file_retrieval(agent_path: str):
     # END NEW LOGGING
     
     try:
-        retrieval_response = requests.post(AGENT_API_URL, json={"query": retrieval_cmd})
+        post_payload = {"query": retrieval_cmd}
+        # Attach credentials if requested either by explicit env_name or by use_default flag
+        if env_name:
+            creds, _ = load_env_credentials(env_name)
+            if creds:
+                post_payload["credentials"] = creds
+        elif use_default:
+            creds, _ = load_env_credentials(None)
+            if creds:
+                post_payload["credentials"] = creds
+
+        retrieval_response = requests.post(AGENT_API_URL, json=post_payload)
         retrieval_response.raise_for_status()
         retrieval_data = retrieval_response.json()
         
@@ -199,13 +283,59 @@ def format_matches_for_display(matches):
     return "\n".join(output)
 
 # CRITICAL FIX: Added optional_args parameter to pass arguments reliably
-def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: bool = False, optional_args: str = ""):
+def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: bool = False, optional_args: str = "", current_region_cli_arg: str = "us", env_name: Optional[str] = None, use_default: bool = False):
     """
     Executes the command against the agent API and streams the output 
     back to the client via SocketIO events.
     """
     
+    # If an environment name was provided by the UI, load its credentials and attach
+    creds_payload = {}
+    # Load credentials only if env_name provided or the user explicitly requested the default
+    if env_name:
+        creds, _ = load_env_credentials(env_name)
+        if creds:
+            creds_payload = creds
+    elif use_default:
+        # User explicitly requested the default credentials (./.veracode/credentials or ~/.veracode/credentials)
+        creds, path = load_env_credentials(None)
+        if creds:
+            creds_payload = creds
+
+    # Determine effective region: prefer explicit region from credentials file, else infer from env_name, else keep UI region
+    effective_region_cli_arg = current_region_cli_arg
+    # 1) check credentials for a REGION key (case-insensitive)
+    creds_region = None
+    for k, v in creds_payload.items():
+        if k.lower() == 'region':
+            creds_region = v
+            break
+
+    if creds_region:
+        mapped = REGION_MAP.get(creds_region.strip().lower())
+        if mapped:
+            effective_region_cli_arg = mapped
+        else:
+            # fallback: accept short values like 'us'/'eu' if present
+            if creds_region.strip().lower() in REGION_MAP:
+                effective_region_cli_arg = REGION_MAP[creds_region.strip().lower()]
+    else:
+        # 2) infer from env_name convention (e.g., 'eu-default' -> eu)
+        if env_name:
+            name_l = env_name.lower()
+            if name_l.startswith('eu') or name_l.startswith('europe') or '-eu' in name_l:
+                effective_region_cli_arg = 'eu'
+            elif name_l.startswith('us') or name_l.startswith('com') or 'commercial' in name_l:
+                effective_region_cli_arg = 'us'
+
+    # Ensure the region CLI arg is included so the agent and helper honor the selected region.
+    lower_cmd = command_str.lower()
+    if "--region" not in lower_cmd and " -r " not in lower_cmd:
+        command_str = f"{command_str} --region {effective_region_cli_arg}"
+
     payload = {"query": command_str}
+    if creds_payload:
+        payload["credentials"] = creds_payload
     
     # 1. Pre-extract command type from the original input string (if it's a helper call)
     original_command_type = None
@@ -216,6 +346,16 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
             original_command_type = match_inferred.group(1)
             
     try:
+        # Emit a small non-sensitive debug line to the client so the UI shows which env (if any) and region are used
+        # Emit whether credentials are being forwarded. Don't include secret values.
+        if creds_payload:
+            socketio.emit('cli_output', {'data': f"\n🔐 Forwarding credentials from environment: {env_name if env_name else 'default'} (region: {effective_region_cli_arg})\n"}, room=sid)
+        else:
+            if use_default:
+                socketio.emit('cli_output', {'data': f"\n⚠️ Requested default credentials but none found (searched ./.veracode/credentials and ~/.veracode/credentials). Using region: {effective_region_cli_arg}\n"}, room=sid)
+            else:
+                socketio.emit('cli_output', {'data': f"\n🔐 No environment credentials forwarded (using region: {effective_region_cli_arg})\n"}, room=sid)
+
         response = requests.post(AGENT_API_URL, json=payload)
         response.raise_for_status() 
         data = response.json() 
@@ -263,23 +403,23 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                     match_id = ""
                     
                     # NOTE: optional_args were passed to this function via handle_command
-                    
+
                     # REST Final Execution for Unique Match
                     if api_type == "rest" and app_guid:
                         match_id = f"GUID: {app_guid}"
-                        
+
                         if command_type in ["summary_report"]:
                             # Use optional_args from the function call
-                            final_cmd_build = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {DEFAULT_REGION}" 
+                            final_cmd_build = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {effective_region_cli_arg}"
                         else:
-                            final_cmd_build = f"veracli app_info_ui_helper --guid {app_guid} --region {DEFAULT_REGION}" 
-                        
+                            final_cmd_build = f"veracli app_info_ui_helper --guid {app_guid} --region {effective_region_cli_arg}"
+
                     # CRITICAL FIX: Changed -a to -i based on user's successful execution log
                     elif api_type == "xml" and app_id and command_type:
-                        # XML/App ID execution 
+                        # XML/App ID execution
                         # Use optional_args from the function call
                         # NOTE: Using -i is correct for XML app info/report commands
-                        final_cmd_build = f"veracli {command_type} -i {app_id} {optional_args} --region {DEFAULT_REGION}" 
+                        final_cmd_build = f"veracli {command_type} -i {app_id} {optional_args} --region {effective_region_cli_arg}"
                         match_id = f"ID: {app_id}"
                     
                     if final_cmd_build:
@@ -288,6 +428,8 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                         
                         # Execute the final lookup command 
                         payload_final = {"query": final_cmd}
+                        if creds_payload:
+                            payload_final["credentials"] = creds_payload
                         response_final = requests.post(AGENT_API_URL, json=payload_final)
                         response_final.raise_for_status()
                         data_final = response_final.json()
@@ -309,7 +451,9 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                             multi_match_context[sid] = {
                                 "action": "review_mitigation",
                                 "base_cmd": final_cmd, # The command that generated the list and crashed
-                                "region": DEFAULT_REGION
+                                "region": effective_region_cli_arg,
+                                "env_name": env_name,
+                                "use_default": use_default
                             }
                             
                             # Extract and stream output *up to* the interactive prompt
@@ -333,7 +477,10 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                             # Store context and prompt user instead of immediate download
                             multi_match_context[sid] = {
                                 "action": "download",
-                                "agent_path": agent_path
+                                "agent_path": agent_path,
+                                "env_name": env_name,
+                                "region": effective_region_cli_arg,
+                                "use_default": use_default
                             }
                             file_name = os.path.basename(agent_path)
                             
@@ -391,7 +538,10 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                         "matches": matches,
                         "api_type": api_type,
                         "command": command_type, 
-                        "optional_args": optional_args # <<< Storing optional args reliably
+                        "optional_args": optional_args, # <<< Storing optional args reliably
+                        "env_name": env_name,
+                        "region": effective_region_cli_arg,
+                        "use_default": use_default
                     } 
                     
                     display_output = format_matches_for_display(matches)
@@ -427,7 +577,9 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
             multi_match_context[sid] = {
                 "action": "review_mitigation",
                 "base_cmd": final_cmd, # The command that generated the list and crashed
-                "region": DEFAULT_REGION
+                "region": effective_region_cli_arg,
+                "env_name": env_name,
+                "use_default": use_default
             }
             
             # Extract and stream output *up to* the interactive prompt
@@ -451,7 +603,10 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
             # Store context and prompt user instead of immediate download
             multi_match_context[sid] = {
                 "action": "download",
-                "agent_path": agent_path
+                "agent_path": agent_path,
+                "env_name": env_name,
+                "region": effective_region_cli_arg,
+                "use_default": use_default
             }
             file_name = os.path.basename(agent_path)
             
@@ -475,16 +630,50 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
             socketio.emit('cli_output', {'data': f"\n--- ERROR/STDERR ---\n{html.escape(final_stderr)}\n"}, room=sid)
         
         socketio.emit('cli_output', {'data': f"\n(Exit Code: {final_exit_code})\n"}, room=sid)
+        # Signal the end of the command execution and return to avoid duplicate streaming below
+        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
         
     except requests.exceptions.HTTPError as e:
         error_msg = f"\n❌ HTTP Error {response.status_code}: {str(e)}\n"
         socketio.emit('cli_output', {'data': error_msg}, room=sid)
+        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
     except Exception as e:
         error_msg = f"\n❌ General Error: {str(e)}\n"
         socketio.emit('cli_output', {'data': error_msg}, room=sid)
+        socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+        return
         
-    # Signal the end of the command execution
+    # Check if the output is the special JSON payload for credential rotation
+    try:
+        data = json.loads(final_output)
+        if data.get("success") and "VERACODE_API_KEY_ID" in data:
+            
+            # 1. CRITICAL: Set the environment variables in the server process
+            os.environ["VERACODE_API_KEY_ID"] = data["VERACODE_API_KEY_ID"]
+            os.environ["VERACODE_API_KEY_SECRET"] = data["VERACODE_API_KEY_SECRET"]
+            
+            # 2. Stream the simple success message back to the client
+            socketio.emit('cli_output', {'data': "\n✅ Credentials successfully rotated and set on the server."}, room=sid)
+            
+            # 3. CRITICAL: Signal to the client to unlock the UI
+            socketio.emit('cli_output', {'data': "Credentials successfully rotated."}, room=sid)
+
+            # NOTE: We return here, skipping the general streaming loop
+            return
+            
+    except json.JSONDecodeError:
+        # Not a JSON payload, proceed to stream as regular output
+        pass
+
+    # Stream the standard output (if not intercepted as rotation JSON)
+    for chunk in final_output.splitlines(keepends=True):
+        socketio.emit('cli_output', {'data': html.escape(chunk)}, room=sid)
+
+    # Signal the end of the command execution and return to avoid duplicate streaming below
     socketio.emit('cli_prompt', {'data': '> '}, room=sid)
+    return
 
 # --- WebSocket Event Handlers ---
 
@@ -503,8 +692,20 @@ def handle_disconnect():
 @socketio.on('command')
 def handle_command(data):
     """Receives command from the client and executes it."""
+    # Debug: emit received payload overview (non-sensitive)
+    try:
+        recv_env = data.get('env_name') if isinstance(data, dict) else None
+        recv_region = data.get('region_select') if isinstance(data, dict) else None
+        recv_use_default = data.get('use_default') if isinstance(data, dict) else None
+        socketio.emit('cli_output', {'data': f"\n[DEBUG] Received command payload - env_name: '{recv_env}', region_select: '{recv_region}', use_default: '{recv_use_default}'\n"}, room=request.sid)
+    except Exception:
+        pass
     user_cmd = data.get('cmd', '').strip()
     sid = request.sid
+    region_ui = data.get('region_select', 'Commercial').strip().lower() # Default to 'Commercial'
+    current_region_cli_arg = REGION_MAP.get(region_ui, DEFAULT_REGION_CLI_ARG)
+    use_default = bool(data.get('use_default', False))
+    env_name = None if use_default else (data.get('env_name', '') or None)
 
     if not user_cmd:
         emit('cli_prompt', {'data': '> '}, room=sid)
@@ -521,8 +722,8 @@ def handle_command(data):
         if user_cmd.lower() in ('y', 'yes', ''): # Accept 'Y' or empty input as confirmation
             socketio.emit('cli_output', {'data': f"User selected Y. Retrieving file from agent...\n"}, room=sid)
             try:
-                # STEP 2: RETRIEVE CONTENT from the remote agent
-                file_content = _execute_agent_file_retrieval(agent_path)
+                # STEP 2: RETRIEVE CONTENT from the remote agent (preserve selected env/use_default)
+                file_content = _execute_agent_file_retrieval(agent_path, context.get('env_name'), context.get('use_default', False))
                 
                 # STEP 3: TRANSFER to client
                 handle_detailed_report_transfer_from_agent(sid, agent_path, file_content)
@@ -560,8 +761,9 @@ def handle_command(data):
             
             socketio.emit('cli_output', {'data': f"\nExecuting mitigation review for IDs: {issue_ids}\nCommand: {final_mitigation_cmd}\n"}, room=sid)
             
-            # Execute the final, non-interactive command
-            execute_agent_command_stream(final_mitigation_cmd, sid, is_helper_call=False)
+            # Execute the final, non-interactive command using stored context env_name and stored region
+            mitigation_region = context.get('region', current_region_cli_arg)
+            execute_agent_command_stream(final_mitigation_cmd, sid, is_helper_call=False, current_region_cli_arg=mitigation_region, env_name=context.get('env_name'), use_default=context.get('use_default', False))
             return # EXIT: execute_agent_command_stream will handle the prompt at the end
             
         # If execution skipped (no issue IDs) or successful execution finished, return to main prompt
@@ -590,14 +792,16 @@ def handle_command(data):
             final_cmd = ""
             
             if api_type == "rest" and app_guid:
+                region_to_use = context.get('region', current_region_cli_arg)
                 if command_type in ["summary_report", "detailed_report", "review_mitigation"]:
-                    final_cmd = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {DEFAULT_REGION}" 
+                    final_cmd = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {region_to_use}" 
                 else:
-                    final_cmd = f"app info guid {app_guid} rest --region {DEFAULT_REGION}" 
+                    final_cmd = f"app_info_ui_helper --guid {app_guid} --region {region_to_use}" 
                 
             # CRITICAL FIX: Changed -a to -i
             elif api_type == "xml" and app_id and command_type:
-                final_cmd = f"veracli {command_type} -i {app_id} {optional_args} --region {DEFAULT_REGION}" 
+                region_to_use = context.get('region', current_region_cli_arg)
+                final_cmd = f"veracli {command_type} -i {app_id} {optional_args} --region {region_to_use}" 
             else:
                  # Re-using the diagnostic improvement for selection failure
                  missing_data = []
@@ -614,7 +818,9 @@ def handle_command(data):
             
             socketio.emit('cli_output', {'data': f"\n✅ Selection '{selection_num}' ({app_name}) made. Executing: {final_cmd}\n"}, room=sid)
             
-            execute_agent_command_stream(final_cmd, sid, is_helper_call=False)
+            # Use env_name and stored region from selection context to ensure the same credentials/region are used
+            selection_region = context.get('region', current_region_cli_arg)
+            execute_agent_command_stream(final_cmd, sid, is_helper_call=False, current_region_cli_arg=selection_region, env_name=context.get('env_name'), use_default=context.get('use_default', False))
         else:
             socketio.emit('cli_output', {'data': "\n❌ Invalid selection number. Please try the command again.\n"}, room=sid)
             socketio.emit('cli_prompt', {'data': '> '}, room=sid)
@@ -632,22 +838,93 @@ def handle_command(data):
         
         socketio.emit('cli_output', {'data': f"\n🔎 Checking for matches via UI Helper (Cmd: {helper_cmd})....\n"}, room=sid)
         
-        # CRITICAL FIX: Pass optional_args to the stream function, making context storage reliable
-        execute_agent_command_stream(helper_cmd, sid, is_helper_call=True, optional_args=optional_args) 
+        # Pass optional_args and the current region to the stream function
+        execute_agent_command_stream(helper_cmd, sid, is_helper_call=True, optional_args=optional_args, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=data.get('use_default', False))
         
         return
 
     # 4. Standard Command Execution (Fallthrough for other commands)
     if sid in multi_match_context:
         del multi_match_context[sid] 
-    
-    execute_agent_command_stream(user_cmd, sid, is_helper_call=False)
+        
+    execute_agent_command_stream(user_cmd, sid, is_helper_call=False, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=data.get('use_default', False))
+    return
 
 # --- Flask Routes (Only for initial page load) ---
 @app.route("/", methods=["GET"])
 def index():
     # Assuming the HTML content is served via a template named 'chat.html'
     return render_template("chat.html")
+
+
+@app.route('/environments', methods=['GET'])
+def list_environments():
+    """Return a JSON list of available environment names discovered under .veracode/ and ~/.veracode/."""
+    envs = find_environment_files()
+    names = sorted(envs.keys())
+    return json.dumps(names), 200, {'Content-Type': 'application/json'}
+
+
+@app.route('/environments', methods=['POST'])
+def create_environment():
+    """Create a new environment credentials file under ./ .veracode/ with given name and content.
+
+    Expects JSON: { "name": "dev", "content": "VERACODE_API_KEY_ID=...\nVERACODE_API_KEY_SECRET=..." }
+    """
+    try:
+        data = request.get_json(force=True)
+        name = data.get('name')
+        content = data.get('content', '')
+
+        if not name or '/' in name or '..' in name:
+            return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
+
+        target_dir = Path(os.getcwd()) / '.veracode'
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_file = target_dir / f"{name}.credentials"
+
+        with target_file.open('w', encoding='utf-8') as fh:
+            fh.write(content)
+
+        return json.dumps({'ok': True, 'path': str(target_file)}), 201, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return json.dumps({'error': str(e)}), 500, {'Content-Type': 'application/json'}
+
+
+@app.route('/environments/<env_name>', methods=['GET'])
+def get_environment(env_name):
+    """Return the raw credential file content for a single environment name, if present."""
+    try:
+        if '/' in env_name or '..' in env_name:
+            return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
+
+        creds, path = load_env_credentials(env_name)
+        if path is None:
+            return json.dumps({'error': 'Not found'}), 404, {'Content-Type': 'application/json'}
+
+        # Rebuild the original file content (KEY=VALUE lines). Preserve ordering as best-effort.
+        lines = [f"{k}={v}" for k, v in creds.items()]
+        content = "\n".join(lines)
+        return json.dumps({'ok': True, 'content': content}), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return json.dumps({'error': str(e)}), 500, {'Content-Type': 'application/json'}
+
+
+@app.route('/environments/<env_name>', methods=['DELETE'])
+def delete_environment(env_name):
+    """Delete environment file from project .veracode/ if it exists."""
+    try:
+        if '/' in env_name or '..' in env_name:
+            return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
+
+        target_file = Path(os.getcwd()) / '.veracode' / f"{env_name}.credentials"
+        if target_file.exists():
+            target_file.unlink()
+            return json.dumps({'ok': True}), 200, {'Content-Type': 'application/json'}
+        else:
+            return json.dumps({'error': 'Not found'}), 404, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return json.dumps({'error': str(e)}), 500, {'Content-Type': 'application/json'}
 
 if __name__ == "__main__":
     socketio.run(

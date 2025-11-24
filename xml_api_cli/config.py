@@ -43,7 +43,26 @@ _REGION_DOMAINS = {
 }
 
 ## Default region and file paths
-DEFAULT_REGION: Region = os.getenv("VERACODE_REGION", "us")  # "us" or "eu" or "us_fed"
+# Determine default region from a set of environment variables and normalize
+# common synonyms. This makes the library more robust when callers set
+# `REGION` (used by the web UI) instead of `VERACODE_REGION`.
+def _detect_default_region() -> str:
+    env = os.environ
+    # Priority: VERACODE_REGION, then REGION, then VERACODE_DEFAULT_REGION
+    candidates = [env.get('VERACODE_REGION'), env.get('REGION'), env.get('VERACODE_DEFAULT_REGION')]
+    for c in candidates:
+        if c:
+            v = str(c).strip().lower()
+            if v in ('eu', 'europe', 'european'):
+                return 'eu'
+            if v in ('us', 'commercial', 'com'):
+                return 'us'
+            if v in ('us_fed', 'us-fed', 'fed'):
+                return 'us_fed'
+    # Fallback to explicit env var if provided, else default to 'us'
+    return 'us'
+
+DEFAULT_REGION: Region = _detect_default_region()
 DEFAULT_OUTPUT_DIR = os.path.expanduser(os.getenv("VERACODE_OUTPUT_DIR", "~/veracode_reports"))
 CREDENTIALS_FILE = os.path.expanduser(os.getenv("VERACODE_CREDENTIALS_FILE", "~/.veracode/credentials"))
 

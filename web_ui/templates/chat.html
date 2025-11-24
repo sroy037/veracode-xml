@@ -43,7 +43,7 @@
                 "sidebar main"
                 "sidebar footer";
             grid-template-columns: 350px 1fr; 
-            grid-template-rows: 60px 1fr 45px; 
+            grid-template-rows: auto 1fr 45px; 
             height: 100vh;
             max-width: 100vw;
         }
@@ -53,26 +53,92 @@
             grid-area: header;
             background-color: var(--sidebar-background);
             border-bottom: 1px solid var(--border-color);
-            padding: 0 20px;
+            padding: 6px 14px;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        #header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
+        }
+        #header-controls {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         #app-header h1 {
-            font-size: 1.2em;
-            font-weight: 600;
+            font-size: 1.05em;
+            font-weight: 700;
             color: var(--text-color);
             margin: 0;
+            letter-spacing: -0.2px;
         }
+        #settings-selectors {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1 1 auto;
+            justify-content: flex-start;
+            min-width: 220px;
+        }
+
         #status-bar {
-            font-size: 0.85em;
+            font-size: 0.9em;
             color: var(--light-text);
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
+            justify-content: flex-end;
         }
+        /* Smaller header buttons to reduce visual weight */
+        #app-header .btn {
+            padding: 6px 10px;
+            font-size: 0.85em;
+            border-radius: 6px;
+        }
+        /* Select sizing in header */
+        #settings-selectors select {
+            padding: 6px 10px;
+            height: 36px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: white;
+            color: var(--text-color);
+            box-shadow: none;
+        }
+        #region-select { width: 150px; }
+        #env-select { width: 180px; max-width: 40vw; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--error-color); }
         .status-dot.connected { background-color: var(--success-color); }
+        /* Tooltip for checkbox */
+        .tooltip-wrapper { position: relative; display: inline-block; }
+        .tooltip-icon { font-size: 0.92em; color: var(--primary-color); margin-left:6px; cursor:help; }
+        .tooltip-box {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            background: #fff;
+            color: #222;
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: 6px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            white-space: nowrap;
+            z-index: 1200;
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.12s ease, transform 0.12s ease;
+            font-size: 0.85em;
+        }
+        .tooltip-wrapper:hover .tooltip-box,
+        .tooltip-wrapper:focus-within .tooltip-box { visibility: visible; opacity: 1; transform: translateY(0); }
         
         /* --- Left Sidebar (Input Controls) --- */
         #command-sidebar {
@@ -313,6 +379,11 @@
                 border-right: none;
                 border-radius: 0;
             }
+            /* Make header controls stack neatly on small screens */
+            #app-header { padding: 10px 12px; }
+            #header-controls { flex-direction: column; align-items: stretch; gap: 10px; }
+            #settings-selectors { justify-content: flex-start; }
+            #header-controls > div[style] { width: 100%; display:flex; justify-content:space-between; }
         }
     </style>
 </head>
@@ -320,18 +391,50 @@
     <div id="app-layout">
 
         <div id="app-header">
-            <h1>Veracli Web Shell</h1>
-            <div id="status-bar">
-                <span id="status-dot" class="status-dot"></span>
-                <span id="status-text">Disconnected</span>
-                
-                <button id="clear-all-btn" class="btn btn-primary" onclick="clearAll()">
-                    <i class="fas fa-redo-alt" aria-hidden="true"></i> Clear All
-                </button>
-                
-                <button id="help-btn" class="btn btn-outline" onclick="showHelp()">
-                    <i class="fas fa-question-circle" aria-hidden="true"></i> Help
-                </button>
+            <div id="header-top">
+                <h1>Veracli Web Shell</h1>
+                <div id="status-bar">
+                    <span id="status-dot" class="status-dot"></span>
+                    <span id="status-text">Disconnected</span>
+                </div>
+            </div>
+
+            <div id="header-controls">
+                <div id="settings-selectors">
+                    <select id="region-select">
+                        <option value="Commercial">Commercial</option>
+                        <option value="European">European</option>
+                    </select>
+                    <div style="display:inline-flex; gap:8px; align-items:center;">
+                        <select id="env-select">
+                            <option value="" disabled selected hidden>Select environment</option>
+                        </select>
+                        <label style="font-size:0.83em; color:var(--light-text); display:inline-flex; align-items:center; gap:6px; margin-left:8px;">
+                            <input id="use-default-checkbox" type="checkbox" style="transform:scale(0.95); margin-top:2px;" />
+                            <span style="white-space:nowrap;">Use default (~/.veracode/credentials)</span>
+                            <span class="tooltip-wrapper" tabindex="0" aria-hidden="false">
+                                <i class="fas fa-info-circle tooltip-icon" aria-hidden="true"></i>
+                                <span class="tooltip-box">When checked, the server will use ~/.veracode/credentials or `user_home`/.veracode/credentials.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div style="display:inline-flex; gap:6px; margin-left:8px;">
+                    <button id="env-refresh-btn" class="btn btn-secondary" type="button">Refresh</button>
+                    <button id="env-add-btn" class="btn btn-secondary" type="button">Add</button>
+                    <button id="env-edit-btn" class="btn btn-secondary" type="button">Edit</button>
+                    <button id="env-delete-btn" class="btn btn-secondary" type="button">Delete</button>
+                </div>
+
+                <div style="margin-left:auto; display:inline-flex; gap:8px; align-items:center;">
+                    <button id="clear-all-btn" class="btn btn-primary" onclick="clearAll()">
+                        <i class="fas fa-redo-alt" aria-hidden="true"></i> Clear All
+                    </button>
+                    <button id="help-btn" class="btn btn-outline" onclick="showHelp()">
+                        <i class="fas fa-question-circle" aria-hidden="true"></i> Help
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -344,10 +447,10 @@
                 </summary>
                 <div class="card-content">
                     <div class="input-group">
-                        <button id="check-creds-btn" class="btn btn-primary" onclick="sendCommand('check api')">
+                        <button id="check-creds-btn" class="btn btn-primary" onclick="runCheckApiRest()">
                             <i class="fas fa-lock" aria-hidden="true"></i> API Key Expiry
                         </button>
-                        <button id="check-creds-btn" class="btn btn-primary" onclick="sendCommand('all user')">
+                        <button id="check-creds-btn" class="btn btn-primary" onclick="runUserListRest()">
                             <i class="fas fa-users" aria-hidden="true"></i> List All Users
                         </button>
 
@@ -356,6 +459,14 @@
                         <button id="user-info-rest-btn" class="btn btn-primary" onclick="runUserInfoRest()">
                             <i class="fas fa-info-circle" aria-hidden="true"></i> User Info
                         </button> 
+                    </div>
+
+
+                    <div>
+                        <span class="tooltip-wrapper" tabindex="0" aria-hidden="false">
+                            <i class="fas fa-info-circle tooltip-icon" aria-hidden="true"></i>
+                            <span class="tooltip-box">Scope - Your Platform User-List</span>
+                        </span>
                     </div>
 
                     <div class="segmented-control">
@@ -539,7 +650,33 @@
         </div>
         
         <div id="cli-container">
-            <div id="console">Veracli Shell Connected. Type a command or click a button to begin.</div> 
+            <!-- Console starts empty; server will send the initial welcome message on socket connect -->
+            <div id="console">Connecting...  </div>
+        </div>
+
+        <!-- Environment Modal (Add / Edit) -->
+        <div id="env-modal" class="modal" style="display:none;">
+            <div id="env-modal-dialog" class="modal-dialog" style="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:520px; z-index:9999;">
+                <div id="env-modal-header" style="cursor:move; padding:10px 12px; background:#f7f7f7; border:1px solid #ddd; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
+                    <strong id="env-modal-title">Add Environment</strong>
+                    <button id="env-modal-close" class="btn" style="padding:2px 8px; font-size:1.1em;">×</button>
+                </div>
+                <div id="env-modal-body" style="background:#fff; border-left:1px solid #ddd; border-right:1px solid #ddd; padding:12px; border-bottom:1px solid #ddd;">
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:0.9em; color:#444; display:block; margin-bottom:6px;">Environment Name</label>
+                        <input id="env-modal-name" type="text" placeholder="e.g. dev" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.9em; color:#444; display:block; margin-bottom:6px;">Credentials (KEY=VALUE lines)</label>
+                        <textarea id="env-modal-content" rows="10" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px; font-family:monospace;"></textarea>
+                    </div>
+                </div>
+                <div id="env-modal-footer" style="display:flex; justify-content:flex-end; gap:8px; padding:10px; background:transparent;">
+                    <button id="env-modal-copy" class="btn btn-outline">Copy Example</button>
+                    <button id="env-modal-cancel" class="btn btn-secondary">Cancel</button>
+                    <button id="env-modal-save" class="btn btn-primary">Save</button>
+                </div>
+            </div>
         </div>
 
         <div id="cli-input-container">
@@ -556,6 +693,9 @@
         const cliPrompt = document.getElementById('cli-prompt');
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
+        const regionSelect = document.getElementById('region-select');
+        const envSelect = document.getElementById('env-select');
+        const useDefaultCheckbox = document.getElementById('use-default-checkbox');
 
         let commandHistory = [];
         let historyIndex = -1;
@@ -586,11 +726,21 @@
                 button.style.opacity = '1';
             });
             // Re-enable the CLI input is handled by cli_prompt, but restore status text here
-            statusText.textContent = statusDot.classList.contains('connected') ? 'Connected (Ready to accept commands)' : 'Disconnected';
+            statusText.textContent = statusDot.classList.contains('connected') ? 'Connected' : 'Disconnected';
             cliInput.focus();
         }
-        // ---------------------------------------------
 
+        // Function to enable/disable all primary action buttons in the sidebar
+        function setSidebarButtonsEnabled(enabled) {
+            // Select all buttons inside the card-content areas (the main command buttons)
+            const commandButtons = document.querySelectorAll('.card-content .btn-primary, .card-content .btn-outline');
+            commandButtons.forEach(button => {
+                button.disabled = !enabled;
+                button.style.opacity = enabled ? '1' : '0.5';
+            });
+        }
+
+        // ---------------------------------------------
 
         // --- New: Accordion Behavior Listener ---
         function setupAccordion() {
@@ -722,7 +872,17 @@
             }
             historyIndex = -1;
             
-            socket.emit('command', { cmd: cmd });
+            // Determine region from selector and include it in the payload (do not mutate cmd)
+            const region = (regionSelect && regionSelect.value === 'European') ? 'eu' : 'us';
+            const useDefault = useDefaultCheckbox ? !!useDefaultCheckbox.checked : false;
+            const envName = useDefault ? '' : ((envSelect && envSelect.value) ? envSelect.value : '');
+
+            socket.emit('command', {
+                cmd: cmd,
+                region_select: region,
+                env_name: envName,
+                use_default: useDefault
+            });
         }
         
         function handleKeydown(event) {
@@ -769,6 +929,9 @@
             commandHistory = [];
             historyIndex = -1;
             cliInput.focus();
+            if (envSelect.value === '' || envSelect.value === undefined) {
+                useDefaultCheckbox.checked = true;
+            }
             
             // Note: Since clearAll is a quick local operation, we don't need to disable/enable buttons here, 
             // but if a command was running, it would be a problem. We will keep it simple and assume clearAll is always fast.
@@ -776,11 +939,20 @@
 
 
         // --- Button Command Builders ---
+        function runCheckApiRest() {
+            sendCommand('veracli api_check');
+        }
+
+        function runUserListRest() {
+            sendCommand('veracli api_check -u all');
+        }
+
         function runUserInfoRest() {
             const userId = document.getElementById('user-input').value.trim();
             if (userId) {
                 sendCommand(`veracli api_check -u ${userId}`);
-            } else {
+            } 
+            else {
                 displayMessage("⚠️ Please enter a User ID.", 'error');
             }
             document.getElementById('user-input').value = '';
@@ -791,7 +963,9 @@
             const searchType = document.querySelector('input[name="search_type_list"]:checked').value;
             if (searchId) {
                 sendCommand(`veracli api_check -s ${searchType} -v ${searchId}`);
-            } else {
+                return;
+            } 
+            else {
                 displayMessage("⚠️ Please enter a Search string.", 'error');
             }
             document.getElementById('search-input').value = '';
@@ -902,6 +1076,8 @@
             if (commandType !== 'build_list') {
                 cmd += ` -s ${scanType}`;
             }
+
+            // region will be handled centrally by sendCommand via payload; do not append to cmd here
             
             // Prepend '-b' to the build ID if it exists
             if (buildId) {
@@ -956,6 +1132,8 @@
                 }
             }
 
+            // region will be handled centrally by sendCommand via payload; do not append to cmd here
+
             // Add format (-f) and output prefix (-p) flags
             cmd += ` -f ${format} -p ${prefix}`; 
             
@@ -982,10 +1160,259 @@
             cliInput.focus();
         }
 
+        // --- Environment Modal Helpers (Open / Close / Save / Drag) ---
+        const ENV_EXAMPLE = `VERACODE_API_KEY_ID=YOUR_API_KEY_ID\nVERACODE_API_KEY_SECRET=YOUR_API_KEY_SECRET`;
+        // Refresh environments list (global so modal can call it)
+        function refreshEnvs() {
+            fetch('/environments')
+                .then(r => r.json())
+                .then(list => {
+                    if (!envSelect) return;
+                    const current = envSelect.value;
+                    // Clear existing options and recreate a neutral placeholder
+                    envSelect.innerHTML = '';
+                    const placeholder = document.createElement('option');
+                    placeholder.value = '';
+                    placeholder.disabled = true;
+                    placeholder.selected = true;
+                    placeholder.hidden = true;
+                    placeholder.textContent = 'Select environment';
+                    envSelect.appendChild(placeholder);
+                    list.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        envSelect.appendChild(opt);
+                    });
+                    // restore selection if still present
+                    if (current) envSelect.value = current;
+                })
+                .catch(err => console.warn('Failed to refresh envs', err));
+        }
+        function openEnvModal(mode = 'add', name = '', content = '') {
+            const modal = document.getElementById('env-modal');
+            const dlg = document.getElementById('env-modal-dialog');
+            const title = document.getElementById('env-modal-title');
+            const nameInput = document.getElementById('env-modal-name');
+            const contentInput = document.getElementById('env-modal-content');
+
+            title.textContent = mode === 'edit' ? `Edit Environment: ${name}` : 'Add Environment';
+            nameInput.value = name || '';
+            // For edit mode we will try to fetch existing content if not provided
+            if (mode === 'edit' && !content) {
+                fetch(`/environments/${encodeURIComponent(name)}`)
+                    .then(r => r.ok ? r.json() : Promise.reject(r))
+                    .then(j => { if (j && j.content) contentInput.value = j.content; })
+                    .catch(() => { contentInput.value = ''; });
+            } else {
+                // For Add mode: show example as placeholder (shadow text) when no explicit content provided
+                if (mode === 'add') {
+                    contentInput.value = '';
+                    contentInput.placeholder = content || ENV_EXAMPLE;
+                } else {
+                    contentInput.placeholder = '';
+                    contentInput.value = content || '';
+                }
+            }
+
+            modal.style.display = 'block';
+            // set focus to name if adding; content if editing
+            setTimeout(() => {
+                (mode === 'add' ? nameInput : contentInput).focus();
+            }, 50);
+        }
+
+        function closeEnvModal() {
+            const modal = document.getElementById('env-modal');
+            const nameInput = document.getElementById('env-modal-name');
+            const contentInput = document.getElementById('env-modal-content');
+            nameInput.value = '';
+            contentInput.value = '';
+            modal.style.display = 'none';
+        }
+
+        // Save handler: POST to /environments and refresh list
+        function saveEnvFromModal() {
+            const name = document.getElementById('env-modal-name').value.trim();
+            const content = document.getElementById('env-modal-content').value;
+            if (!name) { displayMessage('⚠️ Environment name is required.', 'warning'); return; }
+            // Confirm overwrite if an environment with this name already exists
+            const exists = Array.from(document.querySelectorAll('#env-select option')).some(o => o.value === name);
+            if (exists) {
+                if (!confirm(`Environment '${name}' already exists. Overwrite?`)) {
+                    displayMessage('⚠️ Save cancelled by user.', 'warning');
+                    return;
+                }
+            }
+
+            fetch('/environments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, content: content })
+            }).then(resp => {
+                if (resp.status === 201) {
+                    displayMessage(`✅ Environment '${name}' saved.`, 'success');
+                    closeEnvModal();
+                    refreshEnvs();
+                } else {
+                    resp.json().then(j => displayMessage(`❌ ${j.error || 'Failed to save environment'}`, 'error'));
+                }
+            }).catch(err => displayMessage(`❌ Error: ${err}`, 'error'));
+        }
+
+        // Make modal draggable by header
+        (function setupModalDrag() {
+            let isDown = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+            const header = document.getElementById('env-modal-header');
+            const dlg = document.getElementById('env-modal-dialog');
+            if (!header || !dlg) return;
+
+            header.addEventListener('mousedown', (e) => {
+                isDown = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = dlg.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+                dlg.style.transform = 'none';
+                dlg.style.left = `${startLeft}px`;
+                dlg.style.top = `${startTop}px`;
+                dlg.style.position = 'fixed';
+                document.body.style.userSelect = 'none';
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDown) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                dlg.style.left = `${startLeft + dx}px`;
+                dlg.style.top = `${startTop + dy}px`;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDown) {
+                    isDown = false;
+                    document.body.style.userSelect = '';
+                }
+            });
+        })();
+
+        // Wire modal buttons and ESC
+        document.addEventListener('click', (e) => {
+            if (e.target && e.target.id === 'env-modal-close') closeEnvModal();
+            if (e.target && e.target.id === 'env-modal-cancel') closeEnvModal();
+            if (e.target && e.target.id === 'env-modal-save') saveEnvFromModal();
+            if (e.target && e.target.id === 'env-modal-copy') {
+                // Copy example into clipboard and into the textarea
+                const example = ENV_EXAMPLE;
+                const ta = document.getElementById('env-modal-content');
+                if (ta) {
+                    ta.value = example;
+                    ta.placeholder = '';
+                }
+                try { navigator.clipboard.writeText(example); displayMessage('✅ Example copied to clipboard and inserted into editor.', 'success'); } catch (err) { displayMessage('⚠️ Could not copy to clipboard. Example inserted into editor.', 'warning'); }
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('env-modal');
+                if (modal && modal.style.display === 'block') closeEnvModal();
+            }
+        });
+
+
         // Initialize focus and accordion behavior
         window.onload = () => {
             cliInput.focus();
             setupAccordion();
+            cliInput.addEventListener('keydown', handleKeydown);
+            useDefaultCheckbox.checked = true;
+            // Populate environment dropdown from server
+            try {
+                refreshEnvs();
+            } catch (e) {}
+
+            // Wire up environment management buttons
+            const refreshBtn = document.getElementById('env-refresh-btn');
+            const addBtn = document.getElementById('env-add-btn');
+            const editBtn = document.getElementById('env-edit-btn');
+            const deleteBtn = document.getElementById('env-delete-btn');
+
+            function updateEnvButtonsState() {
+                const useDefault = useDefaultCheckbox && useDefaultCheckbox.checked;
+                const selected = envSelect && envSelect.value;
+                const envIsSet = useDefault || !!selected;
+                if (useDefault) {
+                    // When using default credentials, disable edit/delete and the select
+                    if (editBtn) editBtn.disabled = true;
+                    if (deleteBtn) deleteBtn.disabled = true;
+                    if (editBtn) editBtn.style.opacity = '0.5';
+                    if (deleteBtn) deleteBtn.style.opacity = '0.5';
+                    if (envSelect) envSelect.disabled = true;
+                } else {
+                    if (editBtn) editBtn.disabled = !selected;
+                    if (deleteBtn) deleteBtn.disabled = !selected;
+                    if (editBtn) editBtn.style.opacity = selected ? '1' : '0.5';
+                    if (deleteBtn) deleteBtn.style.opacity = selected ? '1' : '0.5';
+                    if (envSelect) envSelect.disabled = false;
+                }
+
+                setSidebarButtonsEnabled(envIsSet);
+
+                cliInput.disabled = !envIsSet;
+                cliInput.placeholder = envIsSet ? '' : 'Please select an environment or check "Use default" first.';
+            }
+
+            // Update state when selection changes
+            if (envSelect) envSelect.addEventListener('change', updateEnvButtonsState);
+            // Wire the Use Default checkbox to toggle select/edit/delete states
+            if (useDefaultCheckbox) {
+                useDefaultCheckbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        // clear selection when switching to default
+                        if (envSelect) envSelect.value = '';
+                    }
+                    updateEnvButtonsState();
+                });
+            }
+
+            if (refreshBtn) refreshBtn.addEventListener('click', refreshEnvs);
+
+            // Add should always open a blank Add modal
+            if (addBtn) addBtn.addEventListener('click', () => {
+                openEnvModal('add', '', '');
+            });
+
+            // Edit opens modal pre-filled for the selected environment
+            if (editBtn) editBtn.addEventListener('click', () => {
+                const selected = envSelect && envSelect.value;
+                if (!selected) {
+                    displayMessage('⚠️ Select an environment to edit.', 'warning');
+                    return;
+                }
+                openEnvModal('edit', selected, '');
+            });
+
+            if (deleteBtn) deleteBtn.addEventListener('click', () => {
+                const name = envSelect && envSelect.value;
+                if (!name) { displayMessage('⚠️ Select an environment to delete.', 'warning'); return; }
+                if (!confirm(`Delete environment '${name}'? This cannot be undone.`)) return;
+                fetch(`/environments/${encodeURIComponent(name)}`, { method: 'DELETE' })
+                    .then(resp => resp.json())
+                    .then(j => {
+                        if (j.ok) {
+                            displayMessage(`✅ Environment '${name}' deleted.`, 'success');
+                            refreshEnvs();
+                        } else {
+                            displayMessage(`❌ ${j.error || 'Failed to delete'}`, 'error');
+                        }
+                    }).catch(err => displayMessage(`❌ Error: ${err}`, 'error'));
+                useDefaultCheckbox.checked = true;
+            });
+
+            // Initialize button states now that elements are wired
+            updateEnvButtonsState();
         };
 
     </script>
