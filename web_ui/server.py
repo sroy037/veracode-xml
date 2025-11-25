@@ -693,18 +693,18 @@ def handle_disconnect():
 def handle_command(data):
     """Receives command from the client and executes it."""
     # Debug: emit received payload overview (non-sensitive)
-    try:
-        recv_env = data.get('env_name') if isinstance(data, dict) else None
-        recv_region = data.get('region_select') if isinstance(data, dict) else None
-        recv_use_default = data.get('use_default') if isinstance(data, dict) else None
-        socketio.emit('cli_output', {'data': f"\n[DEBUG] Received command payload - env_name: '{recv_env}', region_select: '{recv_region}', use_default: '{recv_use_default}'\n"}, room=request.sid)
-    except Exception:
-        pass
+    # try:
+    #     recv_env = data.get('env_name') if isinstance(data, dict) else None
+    #     recv_region = data.get('region_select') if isinstance(data, dict) else None
+    #     recv_use_default = None
+    #     socketio.emit('cli_output', {'data': f"\n[DEBUG] Received command payload - env_name: '{recv_env}', region_select: '{recv_region}', use_default: '{recv_use_default}'\n"}, room=request.sid)
+    # except Exception:
+    #     pass
     user_cmd = data.get('cmd', '').strip()
     sid = request.sid
     region_ui = data.get('region_select', 'Commercial').strip().lower() # Default to 'Commercial'
     current_region_cli_arg = REGION_MAP.get(region_ui, DEFAULT_REGION_CLI_ARG)
-    use_default = bool(data.get('use_default', False))
+    use_default = False
     env_name = None if use_default else (data.get('env_name', '') or None)
 
     if not user_cmd:
@@ -723,7 +723,7 @@ def handle_command(data):
             socketio.emit('cli_output', {'data': f"User selected Y. Retrieving file from agent...\n"}, room=sid)
             try:
                 # STEP 2: RETRIEVE CONTENT from the remote agent (preserve selected env/use_default)
-                file_content = _execute_agent_file_retrieval(agent_path, context.get('env_name'), context.get('use_default', False))
+                file_content = _execute_agent_file_retrieval(agent_path, context.get('env_name'), False)
                 
                 # STEP 3: TRANSFER to client
                 handle_detailed_report_transfer_from_agent(sid, agent_path, file_content)
@@ -763,7 +763,7 @@ def handle_command(data):
             
             # Execute the final, non-interactive command using stored context env_name and stored region
             mitigation_region = context.get('region', current_region_cli_arg)
-            execute_agent_command_stream(final_mitigation_cmd, sid, is_helper_call=False, current_region_cli_arg=mitigation_region, env_name=context.get('env_name'), use_default=context.get('use_default', False))
+            execute_agent_command_stream(final_mitigation_cmd, sid, is_helper_call=False, current_region_cli_arg=mitigation_region, env_name=context.get('env_name'), use_default=False)
             return # EXIT: execute_agent_command_stream will handle the prompt at the end
             
         # If execution skipped (no issue IDs) or successful execution finished, return to main prompt
@@ -820,7 +820,7 @@ def handle_command(data):
             
             # Use env_name and stored region from selection context to ensure the same credentials/region are used
             selection_region = context.get('region', current_region_cli_arg)
-            execute_agent_command_stream(final_cmd, sid, is_helper_call=False, current_region_cli_arg=selection_region, env_name=context.get('env_name'), use_default=context.get('use_default', False))
+            execute_agent_command_stream(final_cmd, sid, is_helper_call=False, current_region_cli_arg=selection_region, env_name=context.get('env_name'), use_default=False)
         else:
             socketio.emit('cli_output', {'data': "\n❌ Invalid selection number. Please try the command again.\n"}, room=sid)
             socketio.emit('cli_prompt', {'data': '> '}, room=sid)
@@ -839,7 +839,7 @@ def handle_command(data):
         socketio.emit('cli_output', {'data': f"\n🔎 Checking for matches via UI Helper (Cmd: {helper_cmd})....\n"}, room=sid)
         
         # Pass optional_args and the current region to the stream function
-        execute_agent_command_stream(helper_cmd, sid, is_helper_call=True, optional_args=optional_args, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=data.get('use_default', False))
+        execute_agent_command_stream(helper_cmd, sid, is_helper_call=True, optional_args=optional_args, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=False)
         
         return
 
@@ -847,7 +847,7 @@ def handle_command(data):
     if sid in multi_match_context:
         del multi_match_context[sid] 
         
-    execute_agent_command_stream(user_cmd, sid, is_helper_call=False, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=data.get('use_default', False))
+    execute_agent_command_stream(user_cmd, sid, is_helper_call=False, current_region_cli_arg=current_region_cli_arg, env_name=env_name, use_default=False)
     return
 
 # --- Flask Routes (Only for initial page load) ---
@@ -931,6 +931,6 @@ if __name__ == "__main__":
         app, 
         host="0.0.0.0", 
         port=3000, 
-        debug=True, 
+        debug=False, 
         allow_unsafe_werkzeug=True
     )

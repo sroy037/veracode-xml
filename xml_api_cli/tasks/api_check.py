@@ -299,25 +299,25 @@ def run(args=None):
         # Added logic for Unified search
         get_user_by_search(args.search, args.value, args.region)
     else:
-        cred_file = os.path.expanduser("~/.veracode/credentials")
+        # cred_file = os.path.expanduser("~/.veracode/credentials")
 
-        if not os.path.exists(cred_file):
-            print(f"❌ Credentials file not found at {cred_file}")
-            sys.exit(1)
+        # if not os.path.exists(cred_file):
+        #     print(f"❌ Credentials file not found at {cred_file}")
+        #     sys.exit(1)
 
-        config = ConfigParser()
-        config.read(cred_file)
+        # config = ConfigParser()
+        # config.read(cred_file)
 
-        if "default" not in config:
-            print("⚠️  [default] section not found in credentials file.")
-            sys.exit(1)
+        # if "default" not in config:
+        #     print("⚠️  [default] section not found in credentials file.")
+        #     sys.exit(1)
 
-        api_id = config.get("default", "veracode_api_key_id", fallback=None)
-        api_key = config.get("default", "veracode_api_key_secret", fallback=None)
+        # api_id = config.get("default", "veracode_api_key_id", fallback=None)
+        # api_key = config.get("default", "veracode_api_key_secret", fallback=None)
 
-        if not api_id or not api_key:
-            print("❌ Missing API credentials in [default] section.")
-            sys.exit(1)
+        # if not api_id or not api_key:
+        #     print("❌ Missing API credentials in [default] section.")
+        #     sys.exit(1)
 
         print("🔍 Validating Veracode credentials...")
         print(f"📡 Using region: {args.region}")

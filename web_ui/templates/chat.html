@@ -411,10 +411,10 @@
                         </select>
                         <label style="font-size:0.83em; color:var(--light-text); display:inline-flex; align-items:center; gap:6px; margin-left:8px;">
                             <input id="use-default-checkbox" type="checkbox" style="transform:scale(0.95); margin-top:2px;" />
-                            <span style="white-space:nowrap;">Use default (~/.veracode/credentials)</span>
+                            <span style="white-space:nowrap;">Environment Blocked</span>
                             <span class="tooltip-wrapper" tabindex="0" aria-hidden="false">
                                 <i class="fas fa-info-circle tooltip-icon" aria-hidden="true"></i>
-                                <span class="tooltip-box">When checked, the server will use ~/.veracode/credentials or `user_home`/.veracode/credentials.</span>
+                                <span class="tooltip-box">When checked, you won't be able to select environments</span>
                             </span>
                         </label>
                     </div>
@@ -804,6 +804,7 @@
             statusText.textContent = 'Connected (Ready to accept commands)';
             // Ensure buttons are enabled on connect
             enableButtons();
+            setSidebarButtonsEnabled(false); // Disable sidebar buttons until environments are loaded
         });
 
         socket.on('disconnect', () => {
@@ -813,6 +814,7 @@
             cliPrompt.textContent = 'OFFLINE: ';
             // Re-enable buttons on disconnect so the user can see the UI is not frozen
             enableButtons(); 
+            setSidebarButtonsEnabled(false); // Disable sidebar buttons when disconnected
         });
 
         socket.on('cli_output', (data) => {
@@ -1342,7 +1344,7 @@
             function updateEnvButtonsState() {
                 const useDefault = useDefaultCheckbox && useDefaultCheckbox.checked;
                 const selected = envSelect && envSelect.value;
-                const envIsSet = useDefault || !!selected;
+                const envIsSet = !!selected;
                 if (useDefault) {
                     // When using default credentials, disable edit/delete and the select
                     if (editBtn) editBtn.disabled = true;
@@ -1361,7 +1363,7 @@
                 setSidebarButtonsEnabled(envIsSet);
 
                 cliInput.disabled = !envIsSet;
-                cliInput.placeholder = envIsSet ? '' : 'Please select an environment or check "Use default" first.';
+                cliInput.placeholder = envIsSet ? '' : 'Please select an environment first.';
             }
 
             // Update state when selection changes

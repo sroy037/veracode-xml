@@ -9,8 +9,6 @@ services:
     command: ["sleep", "infinity"] # CHANGED: Forces the container to stay alive
     ports:
       - "8001:8001"
-    volumes:
-      - ~/.veracode/credentials:/root/.veracode/credentials:ro
     networks:
       - veranet
 
@@ -24,8 +22,6 @@ services:
     command: ["uvicorn", "agent_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
-    volumes:
-      - ~/.veracode/credentials:/root/.veracode/credentials:ro
     depends_on:
       - agent
     networks:
@@ -41,8 +37,6 @@ services:
     command: ["python", "web_ui/server.py"]
     ports:
       - "3000:3000"
-    volumes:
-      - ~/.veracode/credentials:/root/.veracode/credentials:ro
     depends_on:
       - agent_api
     networks:
