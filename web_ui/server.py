@@ -5,6 +5,8 @@ import shlex
 import os
 import sys
 import base64 
+import hashlib # NEW: For passphrase hashing
+import secrets # NEW: For secure hash comparison
 from typing import Optional, Any, Dict
 
 from flask import Flask, render_template, request # pyright: ignore[reportMissingImports]
@@ -41,8 +43,6 @@ DEFAULT_REGION_CLI_ARG = "us"
 multi_match_context: Dict[str, Dict[str, Any]] = {} 
 
 # --- Regex for Command Parsing ---
-# Matches: app info NAME rest
-#APP_INFO_REST_NAME_REGEX = re.compile(r"^veracli\s+(app_info)\s+([^ ]+)\s+rest$", re.IGNORECASE)
 # Matches: veracli (build_list|build_info|detailed_report|summary_report|review_mitigation) -n NAME ...
 # NOTE: review_mitigation is now included here.
 VERACLI_HELPER_REGEX = re.compile(r"^veracli\s+(app_info|build_list|build_info|detailed_report|summary_report|review_mitigation)\s+-n\s+.*", re.IGNORECASE)
@@ -86,6 +86,32 @@ def parse_optional_args(query: str) -> str:
 
 
 # --- Environment credential helpers ---
+
+# --- NEW: Passphrase Hashing Helpers ---
+def _hash_passphrase(passphrase: str, salt: str = "fixed_veracli_salt") -> str:
+    """Calculates a secure hash for the passphrase using a fixed salt for simplicity."""
+    # NOTE: In a real-world app, use bcrypt or PBKDF2 with a per-user/per-env unique salt.
+    salted_pass = (passphrase + salt).encode('utf-8')
+    return hashlib.sha256(salted_pass).hexdigest()
+
+def _load_passphrase_hash(env_name: str) -> Optional[str]:
+    """Loads the stored hash for a given environment name from the companion .hash file."""
+    try:
+        if '/' in env_name or '..' in env_name:
+            return None
+
+        target_dir = Path(os.getcwd()) / '.veracode'
+        target_file = target_dir / f"{env_name}.hash"
+
+        if target_file.exists():
+            with target_file.open('r', encoding='utf-8') as fh:
+                return fh.read().strip()
+    except Exception as e:
+        print(f"Error loading hash for {env_name}: {e}", file=sys.stderr)
+    return None
+# ---------------------------------------
+
+
 def find_environment_files():
     """Return a list of (name, path) for credential files found in project .veracode and user ~/.veracode."""
     envs = {}
@@ -242,14 +268,14 @@ def handle_detailed_report_transfer_from_agent(sid: str, agent_file_path: str, f
         mime_type = "application/octet-stream"
 
     try:
-        # FIX: Ensure content is base64 encoded. Agent usually handles binary (PDF),
-        # but text files (XML) need explicit encoding here if returned as raw strings.
-        if mime_type == "application/xml":
-            # Convert raw XML string content to bytes and then base64 encode it.
-            encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
-        else:
-            # Assume content is already correctly formatted (e.g., base64 for PDF)
-            encoded_content = file_content
+        # # FIX: Ensure content is base64 encoded. Agent usually handles binary (PDF),
+        # # but text files (XML) need explicit encoding here if returned as raw strings.
+        # if mime_type == "application/xml":
+        #     # Convert raw XML string content to bytes and then base64 encode it.
+        #     encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
+        # else:
+        #     # Assume content is already correctly formatted (e.g., base64 for PDF)
+        encoded_content = file_content
 
         # 2. Emit the content to the client 
         socketio.emit('file_download', {
@@ -867,28 +893,74 @@ def list_environments():
 
 @app.route('/environments', methods=['POST'])
 def create_environment():
-    """Create a new environment credentials file under ./ .veracode/ with given name and content.
+    """Create a new environment credentials file AND a companion hash file.
 
-    Expects JSON: { "name": "dev", "content": "VERACODE_API_KEY_ID=...\nVERACODE_API_KEY_SECRET=..." }
+    Expects JSON: { "name": "dev", "content": "KEY=VALUE...", "passphrase": "secret" }
     """
     try:
         data = request.get_json(force=True)
         name = data.get('name')
         content = data.get('content', '')
+        # --- NEW: Get passphrase ---
+        passphrase = data.get('passphrase')
 
         if not name or '/' in name or '..' in name:
             return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
+        
+        # --- NEW: Check for passphrase ---
+        if not passphrase:
+            return json.dumps({'error': 'Passphrase is required for environment security.'}), 400, {'Content-Type': 'application/json'}
 
         target_dir = Path(os.getcwd()) / '.veracode'
         target_dir.mkdir(parents=True, exist_ok=True)
-        target_file = target_dir / f"{name}.credentials"
-
-        with target_file.open('w', encoding='utf-8') as fh:
+        
+        # 1. Save Credentials
+        target_cred_file = target_dir / f"{name}.credentials"
+        with target_cred_file.open('w', encoding='utf-8') as fh:
             fh.write(content)
 
-        return json.dumps({'ok': True, 'path': str(target_file)}), 201, {'Content-Type': 'application/json'}
+        # 2. Save Passphrase Hash
+        target_hash_file = target_dir / f"{name}.hash"
+        passphrase_hash = _hash_passphrase(passphrase)
+        with target_hash_file.open('w', encoding='utf-8') as fh:
+            fh.write(passphrase_hash)
+
+        return json.dumps({'ok': True, 'path': str(target_cred_file)}), 201, {'Content-Type': 'application/json'}
     except Exception as e:
         return json.dumps({'error': str(e)}), 500, {'Content-Type': 'application/json'}
+
+# --- NEW: Authorization Endpoint ---
+@app.route('/authorize_environment', methods=['POST'])
+def authorize_environment():
+    """Checks the provided passphrase against the stored hash for an environment."""
+    try:
+        data = request.get_json(force=True)
+        name = data.get('name')
+        passphrase = data.get('passphrase')
+        
+        if not name or '/' in name or '..' in name:
+            return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
+        
+        if not passphrase:
+            return json.dumps({'error': 'Passphrase is required for authorization.'}), 400, {'Content-Type': 'application/json'}
+
+        # 1. Load the stored hash
+        stored_hash = _load_passphrase_hash(name)
+        if not stored_hash:
+            return json.dumps({'error': f"Environment '{name}' not found or no security hash available. Please re-create it."}), 404, {'Content-Type': 'application/json'}
+        
+        # 2. Compute the hash of the provided passphrase
+        input_hash = _hash_passphrase(passphrase)
+        
+        # 3. Compare hashes securely
+        if secrets.compare_digest(stored_hash, input_hash):
+            return json.dumps({'ok': True}), 200, {'Content-Type': 'application/json'}
+        else:
+            return json.dumps({'error': 'Invalid passphrase.'}), 401, {'Content-Type': 'application/json'}
+
+    except Exception as e:
+        return json.dumps({'error': str(e)}), 500, {'Content-Type': 'application/json'}
+# -----------------------------------
 
 
 @app.route('/environments/<env_name>', methods=['GET'])
@@ -912,14 +984,26 @@ def get_environment(env_name):
 
 @app.route('/environments/<env_name>', methods=['DELETE'])
 def delete_environment(env_name):
-    """Delete environment file from project .veracode/ if it exists."""
+    """Delete environment file and its companion hash file from project .veracode/ if they exist."""
     try:
         if '/' in env_name or '..' in env_name:
             return json.dumps({'error': 'Invalid environment name'}), 400, {'Content-Type': 'application/json'}
 
-        target_file = Path(os.getcwd()) / '.veracode' / f"{env_name}.credentials"
-        if target_file.exists():
-            target_file.unlink()
+        target_cred_file = Path(os.getcwd()) / '.veracode' / f"{env_name}.credentials"
+        # --- NEW: Target hash file ---
+        target_hash_file = Path(os.getcwd()) / '.veracode' / f"{env_name}.hash"
+        
+        deleted_count = 0
+        if target_cred_file.exists():
+            target_cred_file.unlink()
+            deleted_count += 1
+            
+        # --- NEW: Delete hash file ---
+        if target_hash_file.exists():
+            target_hash_file.unlink()
+            deleted_count += 1
+
+        if deleted_count > 0:
             return json.dumps({'ok': True}), 200, {'Content-Type': 'application/json'}
         else:
             return json.dumps({'error': 'Not found'}), 404, {'Content-Type': 'application/json'}

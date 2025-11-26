@@ -268,7 +268,7 @@
             margin-bottom: 5px;
         }
         
-        input[type="text"], select { 
+        input[type="text"], input[type="password"], select { 
             padding: 7px 10px; 
             font-size: 0.9em; 
             border-radius: 4px; 
@@ -460,9 +460,16 @@
                             <i class="fas fa-info-circle" aria-hidden="true"></i> User Info
                         </button> 
                     </div>
+                </div>
+            </details>
 
-
-                    <div>
+            <details class="card" open>
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span>🌐</span> Admin Only User Search
+                </summary>
+                <div class="card-content">
+                    <div class="input-group">
                         <span class="tooltip-wrapper" tabindex="0" aria-hidden="false">
                             <i class="fas fa-info-circle tooltip-icon" aria-hidden="true"></i>
                             <span class="tooltip-box">Scope - Your Platform User-List</span>
@@ -650,11 +657,9 @@
         </div>
         
         <div id="cli-container">
-            <!-- Console starts empty; server will send the initial welcome message on socket connect -->
             <div id="console">Connecting...  </div>
         </div>
 
-        <!-- Environment Modal (Add / Edit) -->
         <div id="env-modal" class="modal" style="display:none;">
             <div id="env-modal-dialog" class="modal-dialog" style="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:520px; z-index:9999;">
                 <div id="env-modal-header" style="cursor:move; padding:10px 12px; background:#f7f7f7; border:1px solid #ddd; border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
@@ -665,6 +670,13 @@
                     <div style="margin-bottom:8px;">
                         <label style="font-size:0.9em; color:#444; display:block; margin-bottom:6px;">Environment Name</label>
                         <input id="env-modal-name" type="text" placeholder="e.g. dev" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:0.9em; color:#444; display:block; margin-bottom:6px;">
+                            <strong>Passphrase (Required for security)</strong>
+                        </label>
+                        <input id="env-modal-passphrase" type="password" placeholder="Enter a secure passphrase" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:4px;">
                     </div>
                     <div>
                         <label style="font-size:0.9em; color:#444; display:block; margin-bottom:6px;">Credentials (KEY=VALUE lines)</label>
@@ -704,6 +716,10 @@
         
         // New: Get all details elements for accordion behavior
         const detailsElements = document.querySelectorAll('#command-sidebar details');
+        
+        // *** NEW: TRACK AUTHORIZED ENVIRONMENT ***
+        let authorizedEnv = null; 
+        // ----------------------------------------
         
         // --- NEW: Button State Management Functions ---
         // Disables all primary action buttons and the CLI input
@@ -777,9 +793,23 @@
         }
         
         // --- File Download Utility ---
-        function downloadFile(content, fileName, mimeType) {
+        function downloadFile(base64Content, fileName, mimeType) {
             try {
-                const blob = new Blob([content], { type: mimeType });
+                // 1. Decode the base64 string to a raw binary string
+                const binaryString = atob(base64Content);
+                const len = binaryString.length;
+                
+                // 2. Convert the binary string into a byte array (Uint8Array)
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    // Get the character code (byte value) at each position
+                    bytes[i] = binaryString.charCodeAt(i); 
+                }
+
+                // 3. Create a Blob (Binary Large Object) from the byte array
+                // The bytes array holds the true, uncorrupted binary data of the file (PDF or XML).
+                const blob = new Blob([bytes], { type: mimeType }); 
+                
                 const url = URL.createObjectURL(blob);
 
                 const a = document.createElement('a');
@@ -934,9 +964,6 @@
             if (envSelect.value === '' || envSelect.value === undefined) {
                 useDefaultCheckbox.checked = true;
             }
-            
-            // Note: Since clearAll is a quick local operation, we don't need to disable/enable buttons here, 
-            // but if a command was running, it would be a problem. We will keep it simple and assume clearAll is always fast.
         }
 
 
@@ -1164,13 +1191,14 @@
 
         // --- Environment Modal Helpers (Open / Close / Save / Drag) ---
         const ENV_EXAMPLE = `VERACODE_API_KEY_ID=YOUR_API_KEY_ID\nVERACODE_API_KEY_SECRET=YOUR_API_KEY_SECRET`;
+        
         // Refresh environments list (global so modal can call it)
         function refreshEnvs() {
             fetch('/environments')
                 .then(r => r.json())
                 .then(list => {
                     if (!envSelect) return;
-                    const current = envSelect.value;
+                    const current = authorizedEnv; // Use authorizedEnv to track what should be selected
                     // Clear existing options and recreate a neutral placeholder
                     envSelect.innerHTML = '';
                     const placeholder = document.createElement('option');
@@ -1186,25 +1214,31 @@
                         opt.textContent = name;
                         envSelect.appendChild(opt);
                     });
-                    // restore selection if still present
+                    // restore authorized selection if still present
                     if (current) envSelect.value = current;
                 })
                 .catch(err => console.warn('Failed to refresh envs', err));
         }
+
         function openEnvModal(mode = 'add', name = '', content = '') {
             const modal = document.getElementById('env-modal');
             const dlg = document.getElementById('env-modal-dialog');
             const title = document.getElementById('env-modal-title');
             const nameInput = document.getElementById('env-modal-name');
             const contentInput = document.getElementById('env-modal-content');
+            // *** NEW: Passphrase Input ***
+            const passphraseInput = document.getElementById('env-modal-passphrase'); 
 
             title.textContent = mode === 'edit' ? `Edit Environment: ${name}` : 'Add Environment';
             nameInput.value = name || '';
+            passphraseInput.value = ''; // Always clear passphrase input
+            
             // For edit mode we will try to fetch existing content if not provided
             if (mode === 'edit' && !content) {
                 fetch(`/environments/${encodeURIComponent(name)}`)
                     .then(r => r.ok ? r.json() : Promise.reject(r))
                     .then(j => { if (j && j.content) contentInput.value = j.content; })
+                    // Note: We deliberately do NOT fetch the existing passphrase or hash for security
                     .catch(() => { contentInput.value = ''; });
             } else {
                 // For Add mode: show example as placeholder (shadow text) when no explicit content provided
@@ -1220,7 +1254,8 @@
             modal.style.display = 'block';
             // set focus to name if adding; content if editing
             setTimeout(() => {
-                (mode === 'add' ? nameInput : contentInput).focus();
+                // Focus on the passphrase field as it's required for both Add and Edit now
+                passphraseInput.focus();
             }, 50);
         }
 
@@ -1228,8 +1263,10 @@
             const modal = document.getElementById('env-modal');
             const nameInput = document.getElementById('env-modal-name');
             const contentInput = document.getElementById('env-modal-content');
+            const passphraseInput = document.getElementById('env-modal-passphrase');
             nameInput.value = '';
             contentInput.value = '';
+            passphraseInput.value = ''; // Clear passphrase
             modal.style.display = 'none';
         }
 
@@ -1237,7 +1274,13 @@
         function saveEnvFromModal() {
             const name = document.getElementById('env-modal-name').value.trim();
             const content = document.getElementById('env-modal-content').value;
+            // *** NEW: Get the Passphrase ***
+            const passphrase = document.getElementById('env-modal-passphrase').value;
+            
             if (!name) { displayMessage('⚠️ Environment name is required.', 'warning'); return; }
+            // *** NEW: Require Passphrase ***
+            if (!passphrase) { displayMessage('⚠️ Passphrase is required to protect the environment.', 'warning'); return; }
+
             // Confirm overwrite if an environment with this name already exists
             const exists = Array.from(document.querySelectorAll('#env-select option')).some(o => o.value === name);
             if (exists) {
@@ -1250,11 +1293,15 @@
             fetch('/environments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name, content: content })
+                // *** NEW: Include content AND passphrase in the body ***
+                body: JSON.stringify({ name: name, content: content, passphrase: passphrase })
             }).then(resp => {
                 if (resp.status === 201) {
-                    displayMessage(`✅ Environment '${name}' saved.`, 'success');
+                    displayMessage(`✅ Environment '${name}' saved. **(Passphrase set)**`, 'success');
                     closeEnvModal();
+                    // Set as authorized upon saving
+                    authorizedEnv = name;
+                    envSelect.value = name;
                     refreshEnvs();
                 } else {
                     resp.json().then(j => displayMessage(`❌ ${j.error || 'Failed to save environment'}`, 'error'));
@@ -1262,6 +1309,69 @@
             }).catch(err => displayMessage(`❌ Error: ${err}`, 'error'));
         }
 
+        // *** NEW FUNCTION: Handles environment selection and passphrase check ***
+        function handleEnvironmentSelection() {
+            const selectedEnv = envSelect.value;
+            
+            // If selecting the placeholder/nothing, reset state
+            if (!selectedEnv) {
+                authorizedEnv = null;
+                updateEnvButtonsState();
+                return;
+            }
+
+            // If the environment is already authorized, we are done
+            if (selectedEnv === authorizedEnv) {
+                updateEnvButtonsState();
+                return;
+            }
+            
+            // Use a simple prompt for the passphrase
+            const passphrase = prompt(`🔑 Please enter the passphrase for environment: ${selectedEnv}`);
+            
+            if (!passphrase) {
+                // User cancelled or entered nothing, revert selection and state
+                envSelect.value = authorizedEnv || ''; // Revert to previously authorized or placeholder
+                authorizedEnv = authorizedEnv; // Keep the prior authorized state
+                updateEnvButtonsState();
+                displayMessage('⚠️ Environment selection cancelled or no passphrase provided.', 'warning');
+                return;
+            }
+
+            // Client-side check complete, now ask the server to validate it
+            fetch('/authorize_environment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: selectedEnv, passphrase: passphrase })
+            })
+            .then(resp => {
+                if (resp.ok) {
+                    // Success: Authorization successful
+                    authorizedEnv = selectedEnv;
+                    displayMessage(`✅ Successfully authorized for environment: ${selectedEnv}`, 'success');
+                    // Now update UI state, which will enable the buttons/CLI
+                    envSelect.value = authorizedEnv;
+                } else {
+                    // Failure: Authorization failed
+                    authorizedEnv = null;
+                    envSelect.value = ''; // Clear selection on failure
+                    // Try to show server error, otherwise default message
+                    resp.json().then(data => {
+                        displayMessage(`❌ Authorization failed for ${selectedEnv}. ${data.error || 'Invalid passphrase.'}`, 'error');
+                    }).catch(() => {
+                        displayMessage(`❌ Authorization failed for ${selectedEnv}. Invalid passphrase.`, 'error');
+                    });
+                }
+            })
+            .catch(err => {
+                authorizedEnv = null;
+                envSelect.value = '';
+                displayMessage(`❌ Network Error during authorization: ${err.message}`, 'error');
+            });
+            updateEnvButtonsState();
+        }
+        // *** END NEW FUNCTION ***
+        
         // Make modal draggable by header
         (function setupModalDrag() {
             let isDown = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
@@ -1330,6 +1440,7 @@
             setupAccordion();
             cliInput.addEventListener('keydown', handleKeydown);
             useDefaultCheckbox.checked = true;
+            
             // Populate environment dropdown from server
             try {
                 refreshEnvs();
@@ -1343,37 +1454,56 @@
 
             function updateEnvButtonsState() {
                 const useDefault = useDefaultCheckbox && useDefaultCheckbox.checked;
-                const selected = envSelect && envSelect.value;
-                const envIsSet = !!selected;
+                // Use the AUTHORIZED environment name for state, not the selected one
+                const envIsSet = !!authorizedEnv; 
+                // Disable CLI if using default or no authorized env
+                cliInput.disabled = useDefault || envIsSet;
+                setSidebarButtonsEnabled(false);
+                
+                // If using default, we allow use
                 if (useDefault) {
-                    // When using default credentials, disable edit/delete and the select
                     if (editBtn) editBtn.disabled = true;
                     if (deleteBtn) deleteBtn.disabled = true;
                     if (editBtn) editBtn.style.opacity = '0.5';
                     if (deleteBtn) deleteBtn.style.opacity = '0.5';
                     if (envSelect) envSelect.disabled = true;
+                    setSidebarButtonsEnabled(false);
+                    cliInput.disabled = false;
+                    cliInput.placeholder = 'Please select and authorize an environment first.';
+                    authorizedEnv = null; // Clear authorization state if default is checked
                 } else {
+                    const selected = true; // We allow edit/delete if environment is selected
                     if (editBtn) editBtn.disabled = !selected;
                     if (deleteBtn) deleteBtn.disabled = !selected;
                     if (editBtn) editBtn.style.opacity = selected ? '1' : '0.5';
                     if (deleteBtn) deleteBtn.style.opacity = selected ? '1' : '0.5';
                     if (envSelect) envSelect.disabled = false;
+                    
+                    // Enable sidebar and CLI only if an environment is authorized
+                    setSidebarButtonsEnabled(selected);
+                    cliInput.disabled = !selected;
+                    cliInput.placeholder = '';
                 }
-
-                setSidebarButtonsEnabled(envIsSet);
-
-                cliInput.disabled = !envIsSet;
-                cliInput.placeholder = envIsSet ? '' : 'Please select an environment first.';
             }
 
             // Update state when selection changes
-            if (envSelect) envSelect.addEventListener('change', updateEnvButtonsState);
-            // Wire the Use Default checkbox to toggle select/edit/delete states
+            if (envSelect) envSelect.addEventListener('change', (e) => {
+                // If the checkbox is checked (Use Default), just run the state update
+                if (useDefaultCheckbox.checked) {
+                    updateEnvButtonsState();
+                } else {
+                    // If the checkbox is unchecked, trigger the security check
+                    handleEnvironmentSelection();
+                }
+            });
+
+            // Wire the Use Default checkbox to toggle select/edit/delete/authorization states
             if (useDefaultCheckbox) {
                 useDefaultCheckbox.addEventListener('change', (e) => {
                     if (e.target.checked) {
-                        // clear selection when switching to default
+                        // clear selection and authorization when switching to default
                         if (envSelect) envSelect.value = '';
+                        authorizedEnv = null; 
                     }
                     updateEnvButtonsState();
                 });
@@ -1405,6 +1535,11 @@
                     .then(j => {
                         if (j.ok) {
                             displayMessage(`✅ Environment '${name}' deleted.`, 'success');
+                            // Clear authorization state if the deleted env was authorized
+                            if (authorizedEnv === name) authorizedEnv = null; 
+                            // Re-select placeholder and fall back to default checkbox
+                            envSelect.value = '';
+                            useDefaultCheckbox.checked = true; 
                             refreshEnvs();
                         } else {
                             displayMessage(`❌ ${j.error || 'Failed to delete'}`, 'error');
