@@ -261,7 +261,7 @@
         }
         
         /* EXPANDED TEXT INPUT STYLING */
-        #app-name-input, #xml-target-input, #build-id-input, #det-xml-target-input, #det-build-id-input, #report-filename-prefix, #mit-app-name-input, #mit-file-name-input { 
+        #app-name-input, #xml-target-input, #build-id-input, #det-xml-target-input, #det-build-id-input, #report-filename-prefix, #mit-app-name-input, #mit-file-name-input, #user-input, #search-input, #api-input { 
             flex-grow: 1;
             width: 100%; 
             margin-top: 5px;
@@ -448,7 +448,7 @@
                 <div class="card-content">
                     <div class="input-group">
                         <button id="check-creds-btn" class="btn btn-primary" onclick="runCheckApiRest()">
-                            <i class="fas fa-lock" aria-hidden="true"></i> API Key Expiry
+                            <i class="fas fa-lock" aria-hidden="true"></i> Your API Expiry
                         </button>
                         <button id="check-creds-btn" class="btn btn-primary" onclick="runUserListRest()">
                             <i class="fas fa-users" aria-hidden="true"></i> List All Users
@@ -458,6 +458,13 @@
                     <div class="input-group">
                         <button id="user-info-rest-btn" class="btn btn-primary" onclick="runUserInfoRest()">
                             <i class="fas fa-info-circle" aria-hidden="true"></i> User Info
+                        </button> 
+                    </div>
+
+                    <div><input type="text" id="api-input" placeholder="Enter API ID..."></div>
+                    <div class="input-group">
+                        <button id="api-info-rest-btn" class="btn btn-primary" onclick="runApiCheckRest()">
+                            <i class="fas fa-lock" aria-hidden="true"></i> Check API Key Expiry
                         </button> 
                     </div>
                 </div>
@@ -946,6 +953,7 @@
             
             // 2. Clear all Text Inputs
             document.getElementById('user-input').value = '';
+            document.getElementById('api-input').value = '';
             document.getElementById('search-input').value = '';
             document.getElementById('app-name-input').value = '';
             document.getElementById('xml-target-input').value = '';
@@ -985,6 +993,18 @@
                 displayMessage("⚠️ Please enter a User ID.", 'error');
             }
             document.getElementById('user-input').value = '';
+        }
+
+        function runApiCheckRest() {
+            const apiId = document.getElementById('api-input').value.trim();
+            if (apiId) {
+                sendCommand(`veracli api_check -i ${apiId}`);
+                return;
+            } 
+            else {
+                displayMessage("⚠️ Please enter an API ID.", 'error');
+            }
+            document.getElementById('api-input').value = '';
         }
 
         function runUserSearchRest() {

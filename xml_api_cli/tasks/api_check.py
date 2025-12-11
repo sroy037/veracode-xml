@@ -28,6 +28,10 @@ def setup_parser(parser: argparse.ArgumentParser):
         help="Search users by Username, Email ID, API ID, etc. Admin only."
     )
     parser.add_argument(
+        "-i", "--api_id",
+        help="Fetch API Expiration by API ID. Admin only."
+    )
+    parser.add_argument(
         "-v", "--value",
         help="Search value"
     )
@@ -287,6 +291,50 @@ def get_user_by_search(search_id: str, search_val: str, region: str):
 
 
 # ----------------------------------------------------------------------
+# 🧩 Function: API Credential Expiry
+# ----------------------------------------------------------------------
+def get_api_expiration_by_id(api_id: str, region: str):
+    """
+    Fetch API Expiration by API ID.
+    """
+    base_url = api_base_rest(region).rstrip("/")
+    url = f"{base_url}/api/authn/v2/api_credentials/{api_id}"
+    print(f"📡 Fetching API credential details for API ID: {api_id}")
+
+    try:
+        resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data is None:
+                print("⚠️  API Credential data not found.\nIf you are the Credential owner, then API Credentials have expired. Please regenerate.")
+                return
+            else:
+                exp_ts = data.get("expiration_ts")
+                print("\n✅ API Credential details retrieved successfully:\n")
+                print(f"🆔 API ID: {data.get('api_id')}")
+                print(f"📅 Expiration: {exp_ts}")
+                try:
+                    exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    days_left = (exp_dt - datetime.now(timezone.utc)).days
+                    if days_left >= 0:
+                        print(f"⏳ Expires in: {days_left} day(s)")
+                    else:
+                        print(f"⚠️  Expired {-days_left} day(s) ago.")
+                except Exception:
+                    pass
+
+        elif resp.status_code == 403:
+            print("❌ Access denied. Admin privileges required to fetch API credential details.")
+        elif resp.status_code == 404:
+            print("⚠️  API Credential not found.")
+        else:
+            print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Connection error: {e}")
+
+# ----------------------------------------------------------------------
 # 🎯 Main Function
 # ----------------------------------------------------------------------
 def run(args=None):
@@ -298,6 +346,8 @@ def run(args=None):
     elif args.search:
         # Added logic for Unified search
         get_user_by_search(args.search, args.value, args.region)
+    elif args.api_id:
+        get_api_expiration_by_id(args.api_id, args.region)
     else:
         # cred_file = os.path.expanduser("~/.veracode/credentials")
 
