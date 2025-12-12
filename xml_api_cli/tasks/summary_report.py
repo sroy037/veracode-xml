@@ -36,11 +36,37 @@ def setup_parser(parser):
 def find_app_rest_by_name(app_name: str, region: str = "us"):
     base_url = api_base_rest(region).rstrip("/")
     url = f"{base_url}/appsec/v1/applications/?name={app_name}"
-    resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=15)
-    if resp.status_code != 200:
-        print(f"❌ Failed to fetch applications (HTTP {resp.status_code}): {resp.text}")
-        return []
-    apps = resp.json().get("_embedded", {}).get("applications", [])
+    params = {"size": 100, "page": 0}
+    total_apps = []
+    while True:
+        resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+        if resp.status_code != 200:
+            print(f"⚠️  Failed to fetch application (HTTP {resp.status_code}): {resp.text}")
+            break
+
+        data = resp.json()
+        applications = data.get("_embedded", {}).get("applications", [])
+        if not apps:
+            break
+        total_apps.extend(applications)
+
+        # 🧾 Pagination info
+        page_info = data.get("page", {})
+        current_page = page_info.get("number", 0)
+        total_pages = page_info.get("total_pages", 1)
+
+        print(f"📄 Processed page {current_page + 1}/{total_pages} ({len(applications)} applications)")
+
+        # Exit if this was the last page
+        if current_page >= total_pages - 1:
+            break
+
+        params["page"] = current_page + 1  # move to next page
+    
+    if total_apps:
+        data = {"_embedded": {"applications": total_apps}}
+        apps = data.json().get("_embedded", {}).get("applications", [])
+        
     return [{"name": a.get("profile", {}).get("name"), "guid": a.get("guid"), "last_scan": a.get("last_completed_scan_date", "-")} for a in apps]
 
 # ----------------------------------------------------------------------
@@ -111,8 +137,16 @@ def print_rest_summary(data: dict):
 
     sca = data.get("software_composition_analysis")
     if sca:
-        total_components = len(sca.get('components', []))
-        total_vulns = sum(c.get('vulnerabilities', 0) for c in sca.get('components', []))
+        comp_wrapper = sca.get("vulnerable_components", {})
+        components = comp_wrapper.get("component_dto", [])
+
+        total_components = len(components)
+
+        total_vulns = sum(
+            len(c.get("vulnerabilities", {}).get("vulnerability_dto", []))
+            for c in components
+        )
+
         print(f"\n📦 Software Composition Analysis (SCA)")
         print(f"  Vulnerable Components: {total_components}")
         print(f"  Total Vulnerabilities: {total_vulns}")

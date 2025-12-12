@@ -93,7 +93,7 @@ def find_app_xml_by_name(app_name: str, region: str = "us"):
 def find_app_rest_by_name(app_name: str, region: str = "us"):
     """Search apps by name using REST API (partial match supported)."""
     base_url = api_base_rest(region).rstrip("/")
-    url = f"{base_url}/appsec/v1/applications/?name={app_name}" 
+    url = f"{base_url}/appsec/v1/applications/?name={app_name}&size=500" 
 
     try:
         # Use the centralized utility
@@ -140,7 +140,14 @@ def show_rest_app_details(app_data: dict, verbose: bool):
     print(f"  Policy Check Date:    {app_data.get('last_policy_compliance_check_date')}")
     print(f"  Created:              {app_data.get('created')}")
     print(f"  Results URL:          {app_data.get('results_url', '-')}")
-    
+    teams = profile.get("teams", [])
+    if teams:
+        print(f"\n👥 Teams ({len(teams)}):")
+        for t in teams:
+            print(f"   • {t.get('team_name')} ({t.get('relationship', {}).get('display_name', '')})")
+    else:
+        print(f"\n👥 No Team Restriction.")
+
     if verbose:
         print("\n--- Raw Profile Details ---")
         print(json.dumps(profile, indent=2))

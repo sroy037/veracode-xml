@@ -135,7 +135,7 @@ def find_app_by_name(app_name: str, region: str = DEFAULT_REGION) -> str | None:
     """
     import xml.etree.ElementTree as ET
     
-    url = endpoint_getapplist(region)
+    url = endpoint_getapplist(region)+ "?size=500"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
 
     if response.status_code != 200:

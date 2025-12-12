@@ -45,7 +45,7 @@ multi_match_context: Dict[str, Dict[str, Any]] = {}
 # --- Regex for Command Parsing ---
 # Matches: veracli (build_list|build_info|detailed_report|summary_report|review_mitigation) -n NAME ...
 # NOTE: review_mitigation is now included here.
-VERACLI_HELPER_REGEX = re.compile(r"^veracli\s+(app_info|build_list|build_info|detailed_report|summary_report|review_mitigation)\s+-n\s+.*", re.IGNORECASE)
+VERACLI_HELPER_REGEX = re.compile(r"^veracli\s+(app_info|app_findings|build_list|build_info|detailed_report|summary_report|review_mitigation)\s+-n\s+.*", re.IGNORECASE)
 # Regex to find the file path created by the veracli agent 
 FILE_PATH_REGEX = re.compile(r"Report downloaded successfully:\s+(.*)", re.IGNORECASE)
 # NEW: Regex to find the file path when the UI Helper runs the command (it sees the pre-download prompt)
@@ -434,7 +434,7 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
                     if api_type == "rest" and app_guid:
                         match_id = f"GUID: {app_guid}"
 
-                        if command_type in ["summary_report"]:
+                        if command_type in ["summary_report", "app_findings"]:
                             # Use optional_args from the function call
                             final_cmd_build = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {effective_region_cli_arg}"
                         else:
@@ -819,11 +819,11 @@ def handle_command(data):
             
             if api_type == "rest" and app_guid:
                 region_to_use = context.get('region', current_region_cli_arg)
-                if command_type in ["summary_report", "detailed_report", "review_mitigation"]:
+                if command_type in ["summary_report", "detailed_report", "review_mitigation", "app_findings"]:
                     final_cmd = f"veracli {command_type} -g {app_guid} -t REST {optional_args} --region {region_to_use}" 
                 else:
                     final_cmd = f"app_info_ui_helper --guid {app_guid} --region {region_to_use}" 
-                
+
             # CRITICAL FIX: Changed -a to -i
             elif api_type == "xml" and app_id and command_type:
                 region_to_use = context.get('region', current_region_cli_arg)

@@ -305,13 +305,15 @@ def get_api_expiration_by_id(api_id: str, region: str):
         resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            if data is None:
+            if data.get('api_id') is None:
                 print("⚠️  API Credential data not found.\nIf you are the Credential owner, then API Credentials have expired. Please regenerate.")
                 return
             else:
                 exp_ts = data.get("expiration_ts")
                 print("\n✅ API Credential details retrieved successfully:\n")
                 print(f"🆔 API ID: {data.get('api_id')}")
+                print(f"🧑‍ User ID: {data.get('user_id')}")
+                print(f"📅 Created on: {data.get('created_ts')}")
                 print(f"📅 Expiration: {exp_ts}")
                 try:
                     exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
@@ -379,12 +381,14 @@ def run(args=None):
             if resp.status_code == 200:
                 data = resp.json()
                 exp_str = data.get("expiration_ts")
+                created_ts = data.get("created_ts")
                 api_id = data.get("api_id")
                 user_id = data.get("user_id")
 
                 print(f"\n✅ Credentials are valid!")
                 print(f"🆔 API ID: {api_id}")
                 print(f"🧑‍ User ID: {user_id}")
+                print(f"📅 Created on: {created_ts}")
                 print(f"📅 Expiration: {exp_str}")
 
                 # --- Calculate days until expiry ---

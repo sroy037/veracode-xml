@@ -48,6 +48,16 @@
             max-width: 100vw;
         }
 
+        /* Sidebar animation via grid */
+        #app-layout {
+            transition: grid-template-columns 0.25s ease;
+        }
+
+        /* When sidebar is collapsed */
+        #app-layout.sidebar-collapsed {
+            grid-template-columns: 80px 1fr;
+        }
+
         /* --- Header / Status Bar --- */
         #app-header {
             grid-area: header;
@@ -261,7 +271,14 @@
         }
         
         /* EXPANDED TEXT INPUT STYLING */
-        #app-name-input, #xml-target-input, #build-id-input, #det-xml-target-input, #det-build-id-input, #report-filename-prefix, #mit-app-name-input, #mit-file-name-input, #user-input, #search-input, #api-input { 
+        #app-name-input, #xml-target-input, #build-id-input, #det-xml-target-input, #det-build-id-input, #flaw-guid-input, #flaw-name-input { 
+            flex-grow: 1;
+            width: 100%; 
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        #report-filename-prefix, #mit-app-name-input, #mit-file-name-input, #user-input, #search-input, #api-input { 
             flex-grow: 1;
             width: 100%; 
             margin-top: 5px;
@@ -316,7 +333,7 @@
         }
 
         .segmented-control { 
-            display: flex; 
+            display: inline-flex; 
             border: 1px solid var(--border-color); 
             border-radius: 4px; 
             overflow: hidden;
@@ -385,6 +402,48 @@
             #settings-selectors { justify-content: flex-start; }
             #header-controls > div[style] { width: 100%; display:flex; justify-content:space-between; }
         }
+
+        /* --- Sidebar Collapse/Expand Functionality --- */
+        #sidebar-toggle-btn {
+            position: absolute;
+            left: 15px;
+            top: 65px;
+            z-index: 2000;
+            cursor: pointer;
+        }
+
+        #sidebar-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 4px 8px;
+            color: var(--primary-color);
+        }
+
+        #command-sidebar.collapsed {
+            width: 60px !important;
+            min-width: 60px !important;
+            overflow-x: hidden;
+        }
+
+        /* Hide only menu labels when collapsed */
+        #command-sidebar.collapsed .label {
+            display: none !important;
+        }
+
+        /* But keep icons centered and visible */
+        #command-sidebar.collapsed .icon {
+            display: inline-block !important;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        /* Ensure summary stays clickable */
+        #command-sidebar.collapsed summary.card-title {
+            justify-content: center;
+            padding: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -392,6 +451,9 @@
 
         <div id="app-header">
             <div id="header-top">
+                 <button id="sidebar-toggle" class="sidebar-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <h1>Veracli Web Shell</h1>
                 <div id="status-bar">
                     <span id="status-dot" class="status-dot"></span>
@@ -439,11 +501,11 @@
         </div>
 
         <div id="command-sidebar">
-            
             <details class="card" open>
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>🌐</span> API Utilities & Credentials
+                    <span class="icon">🔧</span>
+                    <span class="label">API Utilities & Credentials</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group">
@@ -473,7 +535,8 @@
             <details class="card" open>
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>🌐</span> Admin Only User Search
+                    <span class="icon">🌐</span>
+                    <span class="label">Admin Only User Search</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group">
@@ -505,7 +568,8 @@
             <details class="card">
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>🔍</span> Application Lookup & Reports
+                    <span class="icon">🔍</span>
+                    <span class="label">Application Lookup & Reports</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group">
@@ -535,11 +599,67 @@
                 </div>
             </details>
 
+            <details class="card">
+                <summary class="card-title">
+                    <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
+                    <span class="icon">🧮</span>
+                    <span class="label">Application Flaws Lookup</span>
+                </summary>
+                <div class="card-content">
+                    <div><input type="text" id="flaw-guid-input" placeholder="Enter App GUID..."></div>
+                    <div><input type="text" id="flaw-name-input" placeholder="Enter App Name..."></div>
+                    <div>
+                        <input id="violate-policy-checkbox" type="checkbox" style="transform:scale(0.95); margin-top:2px;" />
+                        <span style="white-space:nowrap;">Violates Policy</span>
+                        <input id="more-details-checkbox" type="checkbox" style="transform:scale(0.95); margin-top:2px;" />
+                        <span style="white-space:nowrap;">Added Details</span>
+                        <label for="flaw-type-select" style="font-size: 0.85em; color: var(--light-text); margin-top: 5px; display: block;">Select Scan Type:</label>
+                        <select id="flaw-type-select" style="width: 100%; padding: 7px 10px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; margin-bottom: 10px;">
+                            <option value="" selected></option>
+                            <option value="STATIC">STATIC</option>
+                            <option value="DYNAMIC">DYNAMIC</option>
+                            <option value="MANUAL">MANUAL</option>
+                            <option value="SCA">SCA</option>
+                        </select>
+
+                        <div>
+                            <span class="tooltip-wrapper" tabindex="0" aria-hidden="false">
+                                <i class="fas fa-info-circle tooltip-icon" aria-hidden="true"></i>
+                                <span class="tooltip-box">Severity_GTE is specific severity & higher</span>
+                            </span>
+                            <div class="segmented-control">
+                                <input type="radio" id="sev" name="sev_type" value="Severity" checked>
+                                <label for="sev">Severity</label>
+                                <input type="radio" id="sev_gte" name="sev_type" value="Severity_GTE">
+                                <label for="sev_gte">Severity_GTE</label>
+                            </div>
+                        </div>
+
+                        <label for="flaw-severity-select" style="font-size: 0.85em; color: var(--light-text); margin-top: 5px; display: block;">Select Severity:</label>
+                        <select id="flaw-severity-select" style="width: 100%; padding: 7px 10px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; margin-bottom: 10px;">
+                            <option value="" selected></option>
+                            <option value="5">Very High</option>
+                            <option value="4">High</option>
+                            <option value="3">Medium</option>
+                            <option value="2">Low</option>
+                            <option value="1">Very Low</option>
+                            <option value="0">Informational</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <button id="flaw-info-btn" class="btn btn-primary" onclick="runFlawListing()">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i> Flaw Listing
+                        </button>
+                    </div>
+                </div>
+            </details>
+
             
             <details class="card">
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>⚙️</span> Scan Details [XML Utility]
+                    <span class="icon">⚙️</span>
+                    <span class="label">Scan Details [XML Utility]</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group" style="justify-content: space-between;">
@@ -575,7 +695,8 @@
             <details class="card">
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>📄</span> Detail Report Generation
+                    <span class="icon">📄</span>
+                    <span class="label">Detail Report Generation</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group" style="justify-content: space-between;">
@@ -616,7 +737,8 @@
             <details class="card">
                 <summary class="card-title">
                     <i class="fas fa-chevron-right collapse-icon" aria-hidden="true"></i>
-                    <span>🛡️</span> Mitigation Review & Actions
+                    <span class="icon">🛡️</span>
+                    <span class="label">Mitigation Review & Actions</span>
                 </summary>
                 <div class="card-content">
                     <div class="input-group" style="justify-content: space-between; margin-bottom: 10px;">
@@ -703,6 +825,26 @@
             <input type="text" id="cli-input" autofocus onkeydown="handleKeydown(event)">
         </div>
 
+    </div>
+
+    <!-- 🔐 Hidden passphrase modal -->
+    <div id="passphrase-modal" style="
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    ">
+        <div style="background: white; padding: 20px; border-radius: 8px; width: 280px;">
+            <h3 style="margin-top:0;">Enter Passphrase</h3>
+            <input type="password" id="passphrase-input" style="width:100%; padding:8px; margin-top:10px;">
+            <div style="margin-top:15px; text-align:right;">
+                <button id="passphrase-cancel">Cancel</button>
+                <button id="passphrase-ok">OK</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -962,7 +1104,9 @@
             document.getElementById('det-xml-target-input').value = '';
             document.getElementById('report-filename-prefix').value = ''; 
             document.getElementById('mit-file-name-input').value = '';
-            document.getElementById('mit-app-name-input').value = ''; // Clear mitigation app name
+            document.getElementById('mit-app-name-input').value = '';
+            document.getElementById('flaw-guid-input').value = '';
+            document.getElementById('flaw-name-input').value = '';
             cliInput.value = '';
             
             // 3. Reset history index and focus
@@ -999,7 +1143,6 @@
             const apiId = document.getElementById('api-input').value.trim();
             if (apiId) {
                 sendCommand(`veracli api_check -i ${apiId}`);
-                return;
             } 
             else {
                 displayMessage("⚠️ Please enter an API ID.", 'error');
@@ -1012,7 +1155,6 @@
             const searchType = document.querySelector('input[name="search_type_list"]:checked').value;
             if (searchId) {
                 sendCommand(`veracli api_check -s ${searchType} -v ${searchId}`);
-                return;
             } 
             else {
                 displayMessage("⚠️ Please enter a Search string.", 'error');
@@ -1043,6 +1185,54 @@
                 displayMessage("⚠️ Please enter an Application Name.", 'error');
             }
             document.getElementById('app-name-input').value = '';
+        }
+
+        function runFlawListing() {
+            const guid = document.getElementById('flaw-guid-input').value.trim();
+            const name = document.getElementById('flaw-name-input').value.trim();
+            const violatePolicy = document.getElementById('violate-policy-checkbox').checked;
+            const moreDetails = document.getElementById('more-details-checkbox').checked;
+            const scanType = document.getElementById('flaw-type-select').value;
+            const severity = document.getElementById('flaw-severity-select').value;
+            const sevType = document.querySelector('input[name="sev_type"]:checked').value;
+
+            let cmd = 'veracli app_findings';
+
+            if (guid) {
+                cmd += ` -g ${guid}`;
+            }
+            if (name) {
+                cmd += ` -n "${name}"`;
+            }
+            if (violatePolicy) {
+                cmd += ' --policy true';
+            }
+            if (moreDetails) {
+                cmd += ' --other true';
+            }
+            if (scanType) {
+                cmd += ` -s ${scanType}`;
+            }
+            if (severity) {
+                if (sevType === 'Severity_GTE') {
+                    cmd += ` -SG ${severity}`;
+                } 
+                else {
+                cmd += ` -S ${severity}`;
+                }
+            }
+
+            if (!guid && !name) {
+                displayMessage("⚠️ Please enter an Application GUID or Name.", 'error');
+                return;
+            }
+            else {
+                cmd += ` -t REST`;
+            }
+
+            sendCommand(cmd);
+            document.getElementById('flaw-guid-input').value = '';
+            document.getElementById('flaw-name-input').value = '';
         }
 
         // --- Mitigation Review Function (UPDATED) ---
@@ -1198,7 +1388,7 @@
         function showHelp() {
             consoleOutput.innerHTML += '\n' +
                 '<span style="color: var(--primary-color);">--- HELP ---</span>\n' +
-                '1. API Utilities: Check Creds or List Apps (select XML/REST first).\n' +
+                '1. API Utilities: Check Creds or List Apps.\n' +
                 '2. REST Lookup: Enter App Name/ID and click App Info or Summary Report.\n' +
                 '3. XML Commands: Fill App ID/Name, select Scan Type, optionally Build ID, then click Build List/Info.\n' +
                 '4. XML Reports: Use the App ID/Name field, select **Format** (XML/PDF), optionally set a **Prefix**, and click **Generate & Download**.\n' +
@@ -1330,7 +1520,7 @@
         }
 
         // *** NEW FUNCTION: Handles environment selection and passphrase check ***
-        function handleEnvironmentSelection() {
+        async function handleEnvironmentSelection() {
             const selectedEnv = envSelect.value;
             
             // If selecting the placeholder/nothing, reset state
@@ -1346,8 +1536,9 @@
                 return;
             }
             
-            // Use a simple prompt for the passphrase
-            const passphrase = prompt(`🔑 Please enter the passphrase for environment: ${selectedEnv}`);
+            // Use a simple modal for the passphrase
+            const passphrase = await askPassphrase(selectedEnv);
+            if (!passphrase) return;
             
             if (!passphrase) {
                 // User cancelled or entered nothing, revert selection and state
@@ -1428,6 +1619,28 @@
                 }
             });
         })();
+
+        // Passphrase modal event wiring
+        function askPassphrase(selectedEnv) {
+            return new Promise(resolve => {
+                const modal = document.getElementById("passphrase-modal");
+                const input = document.getElementById("passphrase-input");
+
+                modal.style.display = "flex";
+                input.value = "";
+                input.focus();
+
+                document.getElementById("passphrase-ok").onclick = () => {
+                    modal.style.display = "none";
+                    resolve(input.value);
+                };
+
+                document.getElementById("passphrase-cancel").onclick = () => {
+                    modal.style.display = "none";
+                    resolve(null);
+                };
+            });
+        }
 
         // Wire modal buttons and ESC
         document.addEventListener('click', (e) => {
@@ -1572,6 +1785,41 @@
             updateEnvButtonsState();
         };
 
+        /* 🔥 Add the sidebar expand/collapse JS here */
+        const sidebar = document.getElementById("command-sidebar");
+        const appLayout = document.getElementById("app-layout");
+        const toggleBtn = document.getElementById("sidebar-toggle");
+
+        function closeAllDetails() {
+            document.querySelectorAll("#command-sidebar details[open]").forEach(d => {
+                d.removeAttribute("open");
+            });
+        }
+
+        toggleBtn.addEventListener("click", () => {
+            const isCollapsed = sidebar.classList.toggle("collapsed");
+            appLayout.classList.toggle("sidebar-collapsed", isCollapsed);
+
+            if (isCollapsed) closeAllDetails();
+        });
+
+        // Expand when clicking a collapsed card
+        sidebar.addEventListener("click", (e) => {
+            if (!sidebar.classList.contains("collapsed")) return;
+
+            const summary = e.target.closest("summary");
+            if (!summary) return;
+
+            const details = summary.closest("details");
+            if (!details) return;
+
+            sidebar.classList.remove("collapsed");
+            appLayout.classList.remove("sidebar-collapsed");
+
+            setTimeout(() => details.setAttribute("open", ""), 150);
+
+            e.preventDefault();
+        });
     </script>
 </body>
 </html>

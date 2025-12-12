@@ -14,6 +14,7 @@ SUPPORTED_TASKS = [
     "detailed_report",
     "summary_report",
     "review_mitigation",
+    "app_findings",
     "app_info_ui_helper"
 ]
 

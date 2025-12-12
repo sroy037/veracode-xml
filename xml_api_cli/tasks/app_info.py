@@ -82,6 +82,13 @@ def show_rest_app_details(app, verbose=False):
     print(f"  Policy Check Date:    {app.get('last_policy_compliance_check_date')}")
     print(f"  Created:              {app.get('created')}")
     print(f"  Results URL:          {app.get('results_url', '-')}")
+    teams = profile.get("teams", [])
+    if teams:
+        print(f"\n👥 Teams ({len(teams)}):")
+        for t in teams:
+            print(f"   • {t.get('team_name')} ({t.get('relationship', {}).get('display_name', '')})")
+    else:
+        print(f"\n👥 No Team Restriction.")
 
     if verbose:
         import json
