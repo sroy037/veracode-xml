@@ -351,8 +351,12 @@ def execute_agent_command_stream(command_str: str, sid: str, is_helper_call: boo
             name_l = env_name.lower()
             if name_l.startswith('eu') or name_l.startswith('europe') or '-eu' in name_l:
                 effective_region_cli_arg = 'eu'
+                if effective_region_cli_arg != current_region_cli_arg:
+                    socketio.emit('cli_output', {'data': f"\nSERVER LOG: Inferred region 'eu' from environment name '{env_name}'. Overriding UI region '{current_region_cli_arg}'.\n"}, room=sid)
             elif name_l.startswith('us') or name_l.startswith('com') or 'commercial' in name_l:
                 effective_region_cli_arg = 'us'
+                if effective_region_cli_arg != current_region_cli_arg:
+                    socketio.emit('cli_output', {'data': f"\nSERVER LOG: Inferred region 'us' from environment name '{env_name}'. Overriding UI region '{current_region_cli_arg}'.\n"}, room=sid)
 
     # Ensure the region CLI arg is included so the agent and helper honor the selected region.
     lower_cmd = command_str.lower()
