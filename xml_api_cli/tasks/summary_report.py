@@ -22,6 +22,7 @@ HELP_TEXT = "💬 Fetch summary report (XML/PDF or REST JSON) for a specific app
 def setup_parser(parser):
     parser.add_argument("-i", "--app_id", help="Veracode App ID (XML only, required if --app_name not used)")
     parser.add_argument("-n", "--app_name", help="Veracode App Name (required if --app_id not used)")
+    parser.add_argument("-g", "--guid", help="Application GUID (for specific REST details lookup).")
     parser.add_argument("-f", "--format", choices=["XML", "PDF"], help="Report format (required for XML)")
     parser.add_argument("-s", "--scan_type", choices=["ss", "ds"], default="ss", help="Scan type (required for XML)")
     parser.add_argument("-r", "--region", choices=["us", "eu", "us_fed"], default="us", help="Region for API requests")
@@ -35,11 +36,37 @@ def setup_parser(parser):
 def find_app_rest_by_name(app_name: str, region: str = "us"):
     base_url = api_base_rest(region).rstrip("/")
     url = f"{base_url}/appsec/v1/applications/?name={app_name}"
-    resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=15)
-    if resp.status_code != 200:
-        print(f"❌ Failed to fetch applications (HTTP {resp.status_code}): {resp.text}")
-        return []
-    apps = resp.json().get("_embedded", {}).get("applications", [])
+    params = {"size": 100, "page": 0}
+    total_apps = []
+    while True:
+        resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+        if resp.status_code != 200:
+            print(f"⚠️  Failed to fetch application (HTTP {resp.status_code}): {resp.text}")
+            break
+
+        data = resp.json()
+        applications = data.get("_embedded", {}).get("applications", [])
+        if not apps:
+            break
+        total_apps.extend(applications)
+
+        # 🧾 Pagination info
+        page_info = data.get("page", {})
+        current_page = page_info.get("number", 0)
+        total_pages = page_info.get("total_pages", 1)
+
+        print(f"📄 Processed page {current_page + 1}/{total_pages} ({len(applications)} applications)")
+
+        # Exit if this was the last page
+        if current_page >= total_pages - 1:
+            break
+
+        params["page"] = current_page + 1  # move to next page
+    
+    if total_apps:
+        data = {"_embedded": {"applications": total_apps}}
+        apps = data.json().get("_embedded", {}).get("applications", [])
+        
     return [{"name": a.get("profile", {}).get("name"), "guid": a.get("guid"), "last_scan": a.get("last_completed_scan_date", "-")} for a in apps]
 
 # ----------------------------------------------------------------------
@@ -76,18 +103,22 @@ def print_rest_summary(data: dict):
     print("="*70)
 
     app_name = data.get("app_name", "-")
-    guid = data.get("app_id", "-")
+    app_id = data.get("app_id", "-")
+    version = data.get("version", "-")
     last_scan = data.get("last_update_time", "-")
     policy = data.get("policy_name", "-")
     policy_status = data.get("policy_compliance_status", "-")
-    bu = data.get("business_unit", "Not Specified")
+    total_flaws = data.get("total_flaws", "-")
+    mitigated = data.get("flaws_not_mitigated", "-")
 
-    print(f"🧱 Application: {app_name}")
-    print(f"🆔 GUID:        {guid}")
-    print(f"📅 Last Scan:   {last_scan}")
-    print(f"🏢 Business Unit: {bu}")
-    print(f"📋 Policy:      {policy}")
-    print(f"✅ Policy Status: {policy_status}")
+    print(f"🧱 Application:     {app_name}")
+    print(f"🆔 APP ID:          {app_id}")
+    print(f"🧩 Scan Name:       {version}")
+    print(f"📅 Last Scan:       {last_scan}")
+    print(f"📋 Policy:          {policy}")
+    print(f"✅ Policy Status:   {policy_status}")
+    print(f"⚠️ Total Flaws:     {total_flaws}")
+    print(f"🧠 Flaws Not Mitigated: {mitigated}")
     print("-"*70)
 
     for analysis_type, title, icon in [
@@ -106,8 +137,16 @@ def print_rest_summary(data: dict):
 
     sca = data.get("software_composition_analysis")
     if sca:
-        total_components = len(sca.get('components', []))
-        total_vulns = sum(c.get('vulnerabilities', 0) for c in sca.get('components', []))
+        comp_wrapper = sca.get("vulnerable_components", {})
+        components = comp_wrapper.get("component_dto", [])
+
+        total_components = len(components)
+
+        total_vulns = sum(
+            len(c.get("vulnerabilities", {}).get("vulnerability_dto", []))
+            for c in components
+        )
+
         print(f"\n📦 Software Composition Analysis (SCA)")
         print(f"  Vulnerable Components: {total_components}")
         print(f"  Total Vulnerabilities: {total_vulns}")
@@ -142,6 +181,16 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
 def run(args):
     print("📘 Task: Fetch Summary Report")
     try:
+        if args.guid:
+            guid = args.guid
+            report_url = f"{api_base_rest(args.region).rstrip('/')}/appsec/v2/applications/{guid}/summary_report"
+            resp = requests.get(report_url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=30)
+            if resp.status_code != 200:
+                print(f"❌ Failed to fetch REST summary report ({resp.status_code}): {resp.text}")
+                sys.exit(1)
+            data = resp.json()
+            print_rest_summary(data)
+            return
         if args.api_type == "REST":
             if not args.app_name:
                 print("❌ REST API requires --app_name to search applications.")

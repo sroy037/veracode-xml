@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+from time import sleep
 import requests
 from datetime import datetime, timezone
 from configparser import ConfigParser
@@ -20,6 +21,19 @@ def setup_parser(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-u", "--user",
         help="Fetch user details by user ID or 'all' for list (optional). Admin only."
+    )
+    parser.add_argument(
+        "-s", "--search",
+         choices=["name", "email", "api_id"],
+        help="Search users by Username, Email ID, API ID, etc. Admin only."
+    )
+    parser.add_argument(
+        "-i", "--api_id",
+        help="Fetch API Expiration by API ID. Admin only."
+    )
+    parser.add_argument(
+        "-v", "--value",
+        help="Search value"
     )
 
 # ----------------------------------------------------------------------
@@ -66,16 +80,49 @@ def list_all_users(region: str):
             print("⚠️  No users found.")
             return
 
-        headers = ["Active", "Name", "Email", "User ID", "Username", "Login Enabled"]
+        headers = ["Name", "Email", "User ID", "Username", "Login Enabled"]
         rows = []
         for u in total_users:
-            status_icon = "🟢" if u.get("active") else "🔴"
+            #status_icon = "🟢" if u.get("active") else "🔴"
             name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
             email = u.get("email_address", "")
             uid = u.get("user_id", "")
             uname = u.get("user_name", "")
             login_status = "✅" if u.get("login_enabled") else "❌"
-            rows.append([status_icon, name, email, uid, uname, login_status])
+            # if uid:
+            #     base_url = api_base_rest(region).rstrip("/")
+            #     url = f"{base_url}/api/authn/v2/users/{uid}"
+            #     sleep(1)
+            #     try:
+            #         resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            #         if resp.status_code == 200:
+            #             data = resp.json()
+            #             api_creds = data.get("api_credentials")
+            #             if not api_creds:
+            #                 status_icon = "🟡 - Never Generated"
+            #             else:
+            #                 exp_ts = api_creds.get("expiration_ts")
+            #                 try:
+            #                     exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            #                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            #                     days_left = (exp_dt - datetime.now(timezone.utc)).days
+            #                     if days_left >= 0:
+            #                         status_icon = "🟢 - Active"
+            #                     else:
+            #                         status_icon = "🔴 - Expired"
+            #                 except Exception:
+            #                     pass
+
+            #         elif resp.status_code == 403:
+            #             print("❌ Access denied. Admin privileges required to fetch user details.")
+            #         elif resp.status_code == 404:
+            #             print("⚠️  User not found.")
+            #         else:
+            #             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
+
+            #     except requests.exceptions.RequestException as e:
+            #         print(f"❌ Connection error: {e}")
+            rows.append([name, email, uid, uname, login_status])
 
         # 🧱 Compute column widths dynamically
         col_widths = [max(len(str(row[i])) for row in ([headers] + rows)) for i in range(len(headers))]
@@ -119,7 +166,7 @@ def get_user_details(user_id: str, region: str):
                 print("\n⚠️  API Credentials were never generated for this user.")
             else:
                 print("\n🔐 API Credential Details:")
-                print(f"   🆔 API ID: {api_creds.get('api_id')}")
+                print(f"   🆔 API ID: {api_creds.get('api_id')[:4]}{'*' * (len(api_creds.get('api_id'))//2 - 4)}{api_creds.get('api_id')[len(api_creds.get('api_id'))//2:]}")
                 exp_ts = api_creds.get("expiration_ts")
                 print(f"   📅 Expiration: {exp_ts}")
                 try:
@@ -138,18 +185,151 @@ def get_user_details(user_id: str, region: str):
                 print(f"\n👥 Teams ({len(teams)}):")
                 for t in teams:
                     print(f"   • {t.get('team_name')} ({t.get('relationship', {}).get('display_name', '')})")
+            else:
+                print(f"\n👥 No Team Restriction.")
 
             roles = data.get("roles", [])
             if roles:
                 print(f"\n🧩 Roles ({len(roles)}):")
                 for r in roles:
                     print(f"   • {r.get('role_description', r.get('role_name'))}")
+            else:
+                print(f"\n👥 No Role(s) assigned.")
 
             print("\n✅ User information retrieved successfully.")
         elif resp.status_code == 403:
             print("❌ Access denied. Admin privileges required to fetch user details.")
         elif resp.status_code == 404:
             print("⚠️  User not found.")
+        else:
+            print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Connection error: {e}")
+
+# ----------------------------------------------------------------------
+# 🧩 Function: Search User
+# ----------------------------------------------------------------------
+def get_user_by_search(search_id: str, search_val: str, region: str):
+    """
+    Search User by Username, Email Address or API ID.
+    """
+    if search_id == "name":
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users?user_name={search_val}"
+    elif search_id == "email":
+        encoded_email = search_val.replace("@", "%40")
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users?email_address={encoded_email}"
+    elif search_id == "api_id":
+        base_url = api_base_rest(region).rstrip("/")
+        url = f"{base_url}/api/authn/v2/users/search?api_id={search_val}"
+
+    params = {"size": 300, "page": 0}
+    total_users = []
+    print("📡 Searching all users...")
+
+    try:
+        while True:
+            resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+            if resp.status_code != 200:
+                print(f"⚠️  Failed to fetch users (HTTP {resp.status_code}): {resp.text}")
+                break
+
+            data = resp.json()
+            users = data.get("_embedded", {}).get("users", [])
+            if not users:
+                break
+            total_users.extend(users)
+
+            # 🧾 Pagination info
+            page_info = data.get("page", {})
+            current_page = page_info.get("number", 0)
+            total_pages = page_info.get("total_pages", 1)
+
+            print(f"📄 Processed page {current_page + 1}/{total_pages} ({len(users)} users)")
+
+            # Exit if this was the last page
+            if current_page >= total_pages - 1:
+                break
+
+            params["page"] = current_page + 1  # move to next page
+
+        # 🧮 Prepare table
+        if not total_users:
+            print("⚠️  No users found.")
+            return
+
+        headers = ["User Status", "Name", "Email", "User ID", "Username", "Login Enabled"]
+        rows = []
+        for u in total_users:
+            status_icon = "🟢" if u.get("active") else "🔴"
+            name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+            email = u.get("email_address", "")
+            uid = u.get("user_id", "")
+            uname = u.get("user_name", "")
+            login_status = "✅" if u.get("login_enabled") else "❌"
+            rows.append([status_icon, name, email, uid, uname, login_status])
+
+        if search_id == "api_id":
+            get_user_details(uid, region)
+        else:
+        # 🧱 Compute column widths dynamically
+            col_widths = [max(len(str(row[i])) for row in ([headers] + rows)) for i in range(len(headers))]
+
+            # 🪶 Print table
+            print("\n" + " | ".join(headers[i].ljust(col_widths[i]) for i in range(len(headers))))
+            print("-" * (sum(col_widths) + (3 * (len(headers) - 1))))
+
+            for row in rows:
+                print(" | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(headers))))
+
+            print(f"\n✅ Retrieved total {len(total_users)} users across {page_info.get('total_pages', 1)} page(s).")
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Connection error: {e}")
+
+
+# ----------------------------------------------------------------------
+# 🧩 Function: API Credential Expiry
+# ----------------------------------------------------------------------
+def get_api_expiration_by_id(api_id: str, region: str):
+    """
+    Fetch API Expiration by API ID.
+    """
+    base_url = api_base_rest(region).rstrip("/")
+    url = f"{base_url}/api/authn/v2/api_credentials/{api_id}"
+    print(f"📡 Fetching API credential details for API ID: {api_id}")
+
+    try:
+        resp = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC(), timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('api_id') is None:
+                print("⚠️  API Credential data not found.\nIf you are the Credential owner, then API Credentials have expired. Please regenerate.")
+                return
+            else:
+                exp_ts = data.get("expiration_ts")
+                print("\n✅ API Credential details retrieved successfully:\n")
+                print(f"🆔 API ID: {data.get('api_id')}")
+                print(f"🧑‍ User ID: {data.get('user_id')}")
+                print(f"📅 Created on: {data.get('created_ts')}")
+                print(f"📅 Expiration: {exp_ts}")
+                try:
+                    exp_dt = datetime.strptime(exp_ts.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    days_left = (exp_dt - datetime.now(timezone.utc)).days
+                    if days_left >= 0:
+                        print(f"⏳ Expires in: {days_left} day(s)")
+                    else:
+                        print(f"⚠️  Expired {-days_left} day(s) ago.")
+                except Exception:
+                    pass
+
+        elif resp.status_code == 403:
+            print("❌ Access denied. Admin privileges required to fetch API credential details.")
+        elif resp.status_code == 404:
+            print("⚠️  API Credential not found.")
         else:
             print(f"⚠️  Unexpected response ({resp.status_code}): {resp.text}")
 
@@ -165,26 +345,31 @@ def run(args=None):
             list_all_users(args.region)
         else:
             get_user_details(args.user, args.region)
+    elif args.search:
+        # Added logic for Unified search
+        get_user_by_search(args.search, args.value, args.region)
+    elif args.api_id:
+        get_api_expiration_by_id(args.api_id, args.region)
     else:
-        cred_file = os.path.expanduser("~/.veracode/credentials")
+        # cred_file = os.path.expanduser("~/.veracode/credentials")
 
-        if not os.path.exists(cred_file):
-            print(f"❌ Credentials file not found at {cred_file}")
-            sys.exit(1)
+        # if not os.path.exists(cred_file):
+        #     print(f"❌ Credentials file not found at {cred_file}")
+        #     sys.exit(1)
 
-        config = ConfigParser()
-        config.read(cred_file)
+        # config = ConfigParser()
+        # config.read(cred_file)
 
-        if "default" not in config:
-            print("⚠️  [default] section not found in credentials file.")
-            sys.exit(1)
+        # if "default" not in config:
+        #     print("⚠️  [default] section not found in credentials file.")
+        #     sys.exit(1)
 
-        api_id = config.get("default", "veracode_api_key_id", fallback=None)
-        api_key = config.get("default", "veracode_api_key_secret", fallback=None)
+        # api_id = config.get("default", "veracode_api_key_id", fallback=None)
+        # api_key = config.get("default", "veracode_api_key_secret", fallback=None)
 
-        if not api_id or not api_key:
-            print("❌ Missing API credentials in [default] section.")
-            sys.exit(1)
+        # if not api_id or not api_key:
+        #     print("❌ Missing API credentials in [default] section.")
+        #     sys.exit(1)
 
         print("🔍 Validating Veracode credentials...")
         print(f"📡 Using region: {args.region}")
@@ -196,12 +381,14 @@ def run(args=None):
             if resp.status_code == 200:
                 data = resp.json()
                 exp_str = data.get("expiration_ts")
+                created_ts = data.get("created_ts")
                 api_id = data.get("api_id")
                 user_id = data.get("user_id")
 
                 print(f"\n✅ Credentials are valid!")
                 print(f"🆔 API ID: {api_id}")
                 print(f"🧑‍ User ID: {user_id}")
+                print(f"📅 Created on: {created_ts}")
                 print(f"📅 Expiration: {exp_str}")
 
                 # --- Calculate days until expiry ---

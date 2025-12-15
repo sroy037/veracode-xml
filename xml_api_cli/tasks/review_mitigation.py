@@ -46,6 +46,12 @@ def setup_parser(parser):
         choices=["High & Above","High & Medium","Medium & Above","Medium & Below","All","Very High", "High", "Medium", "Low", "Very Low", "Info"],
         help="Severity Filter"
     )
+    # --- NEW ARGUMENT for Non-Interactive Mode ---
+    parser.add_argument(
+        "-I", "--issue_ids",
+        help="Comma-separated list of issue IDs to fetch mitigation info for (e.g., '1,3,5'). Bypasses interactive selection."
+    )
+    # ---------------------------------------------
 
 def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
     """
@@ -77,6 +83,7 @@ def find_app_id_by_name(app_name: str, region: str = "us") -> str | None:
 def run(args):
     print("📘 Task: Review Mitigation Information")
 
+    # --- 1. Load Issues (From File or API) ---
     if args.file:
         if not os.path.exists(args.file):
             print(f"❌ File '{args.file}' does not exist. Exiting.")
@@ -95,11 +102,11 @@ def run(args):
         app_id = root.get("app_id")
         build_id = root.get("build_id")
         issues = []
-        # Traverse CWEs → staticflaws → flaw
+        
+        # Traverse Static Flaws
         for cwe in root.findall(".//v:cwe", ns):
             for staticflaws in cwe.findall("v:staticflaws", ns):
                 for flaw in staticflaws.findall("v:flaw", ns):
-                    # Optional: skip third-party SCA (they have type="software_composition_analysis")
                     flaw_type = flaw.attrib.get("type", "")
                     if flaw_type.lower() == "software_composition_analysis":
                         continue
@@ -118,7 +125,7 @@ def run(args):
                         "line": flaw.attrib.get("line"),
                     })
 
-        # Traverse dynamicflaws → flaw
+        # Traverse Dynamic Flaws
         for sev in root.findall(".//v:severity", ns):
             severity_level = sev.get("level")
             
@@ -127,11 +134,8 @@ def run(args):
         
                 for cwe in cat.findall(".//v:cwe", ns):
                     cwe_id = cwe.get("cweid")
-                    cwe_name = cwe.get("cwename")
-        
-                    # handle dynamic flaws
+                    
                     for flaw in cwe.findall(".//v:dynamicflaws/v:flaw", ns):
-                        # Optional: skip third-party SCA (they have type="software_composition_analysis")
                         flaw_type = flaw.attrib.get("type", "")
                         if flaw_type.lower() == "software_composition_analysis":
                             continue
@@ -142,7 +146,6 @@ def run(args):
                             "module": category_name,
                             "type": flaw.get("type"),
                             "cweid": cwe_id,
-                            "cwe_name": cwe_name,
                             "description": flaw.get("description"),
                             "remediation_status": flaw.get("remediation_status"),
                             "mitigation_status": flaw.attrib.get("mitigation_status"),
@@ -177,12 +180,30 @@ def run(args):
             print("❌ No issues found in latest build. Exiting.")
             return
 
-    # Let user select issues
-    issue_ids = select_issues_interactively(issues, args.severity)
-    if not issue_ids:
-        print("⚠️  No issues selected. Exiting.")
-        return
 
+    # --- 2. Select Issues (Interactive or Non-Interactive) ---
+    if args.issue_ids:
+        # Non-interactive mode: use provided IDs
+        try:
+            # Ensure provided IDs are integers and filter out empty strings
+            issue_ids = [int(i.strip()) for i in args.issue_ids.split(',') if i.strip()]
+        except ValueError:
+            print("❌ Invalid format for --issue_ids. Must be a comma-separated list of numbers.")
+            return
+            
+        if not issue_ids:
+             print("⚠️  No valid issue IDs provided in --issue_ids. Exiting.")
+             return
+
+    else:
+        # Interactive mode: Let user select issues
+        issue_ids = select_issues_interactively(issues, args.severity)
+        if not issue_ids:
+            print("⚠️  No issues selected. Exiting.")
+            return
+    # -------------------------------------------------------------
+
+    # --- 3. Fetch and Display Mitigations ---
     print(f"📡 Fetching mitigation info for {len(issue_ids)} issue(s)...")
     selected_ids = ",".join([str(i) for i in issue_ids])
     mitigations = fetch_mitigation_info(app_id, build_id, selected_ids, region=args.region)

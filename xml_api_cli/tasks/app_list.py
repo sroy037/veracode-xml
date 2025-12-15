@@ -45,6 +45,8 @@ def list_applications_rest(region: str):
 
     print(f"📡 Fetching applications via REST API ({region})...")
 
+    MAX_PAGES = 10  # hard limit to avoid huge pagination
+
     while True:
         params = {"page": page, "size": size}
         resp = requests.get(url, params=params, auth=RequestsAuthPluginVeracodeHMAC(), timeout=15)
@@ -58,14 +60,23 @@ def list_applications_rest(region: str):
             break
 
         all_apps.extend(apps)
+
+        # Paging info
         page_info = data.get("page", {})
         total_pages = page_info.get("total_pages", 1)
         current_page = page_info.get("number", 0)
 
         print(f"📄 Page {current_page + 1}/{total_pages} retrieved ({len(apps)} apps).")
 
+        # --- NEW BEHAVIOR ---
+        if total_pages > MAX_PAGES:
+            if current_page + 1 >= (MAX_PAGES - 1):   # fetch only first 9 pages (0–8)
+                break
+
+        # Normal pagination stop condition
         if current_page + 1 >= total_pages:
             break
+
         page += 1
 
     if not all_apps:
@@ -97,6 +108,13 @@ def list_applications_rest(region: str):
         print(" | ".join(str(row[i]).ljust(col_widths[i]) for i in range(len(headers))))
 
     print(f"\n✅ Retrieved total {len(all_apps)} applications via REST API.\n")
+
+    if total_pages > MAX_PAGES:
+        print(
+            f"\n⚠️  Total pages = {total_pages}. "
+            f"Only the first {MAX_PAGES - 1} pages were retrieved to improve performance."
+        )
+        print("💡 Tip: Use the -n or --app_name filter for faster and more targeted searches.\n")
 
 # ----------------------------------------------------------------------
 # XML version (legacy)

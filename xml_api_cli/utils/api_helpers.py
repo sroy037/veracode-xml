@@ -34,7 +34,7 @@ def get_app_id_from_name(app_name: str, region: str = DEFAULT_REGION) -> str | N
     resp.raise_for_status()
 
     root, ns = _parse_xml_with_ns(resp.text)
-    # pick the correct tag path
+    # Pick the correct tag path
     if ns:
         apps = root.findall(".//ns:app", ns)
     else:
@@ -135,7 +135,7 @@ def find_app_by_name(app_name: str, region: str = DEFAULT_REGION) -> str | None:
     """
     import xml.etree.ElementTree as ET
     
-    url = endpoint_getapplist(region)
+    url = endpoint_getapplist(region)+ "?size=500"
     response = requests.get(url, auth=RequestsAuthPluginVeracodeHMAC())
 
     if response.status_code != 200:
@@ -143,7 +143,7 @@ def find_app_by_name(app_name: str, region: str = DEFAULT_REGION) -> str | None:
         return []
     
     root = ET.fromstring(response.text)
-    ns = {"ns": "https://analysiscenter.veracode.com/schema/2.0/applist"}  # namespace
+    ns = {"ns": "https://analysiscenter.veracode.com/schema/2.0/applist"}  # XML namespace
     
     matches = []
     for app in root.findall("ns:app", ns):
@@ -162,7 +162,7 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
 
     root = ET.fromstring(response.text)
 
-    # Define namespace
+    # XML namespace for mitigation info
     ns = {"v": "https://analysiscenter.veracode.com/schema/mitigationinfo/1.0"}
 
     mitigations_list = []
@@ -188,7 +188,7 @@ def fetch_mitigation_info(app_id: str, build_id: str, issue_ids: str, region: st
             "mitigations": actions
         })
 
-    # Handle <error> nodes (e.g., flaws with no mitigation info)
+    # Handle <error> nodes for flaws with no mitigation info
     for err in root.findall("v:error", ns):
         if err.attrib.get("type") == "not_found":
             missing_ids = err.attrib.get("flaw_id_list", "").split(",")
@@ -233,7 +233,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
 
     issues = []
 
-    # -------- STATIC FLAWS --------
+    # Static flaws
     for cwe in root.findall(".//v:cwe", ns):
         for staticflaws in cwe.findall("v:staticflaws", ns):
             for flaw in staticflaws.findall("v:flaw", ns):
@@ -254,7 +254,7 @@ def fetch_build_issues(app_id: str, build_id: str, region: str = DEFAULT_REGION)
                     "line": flaw.attrib.get("line"),
                 })
 
-    # -------- DYNAMIC FLAWS --------
+    # Dynamic flaws
     for sev in root.findall(".//v:severity", ns):
         severity_level = sev.get("level")
         for cat in sev.findall(".//v:category", ns):
@@ -304,9 +304,9 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
         "0": "Info"
     }
 
-    # Categorize issues
+    # Categorize issues by severity
     categorized = {label: [] for label in severity_map.values()}
-    categorized["Info"] = []  # ensure "Info" exists
+    categorized["Info"] = []  # Ensure "Info" exists
 
     for issue in issues:
         sev_num = str(issue.get("severity", "0"))
@@ -343,21 +343,22 @@ def select_issues_interactively(issues: list[dict], severity: str | None = None)
     idx = 1
     for sev_label in severity_order:
         if categorized[sev_label]:
-            # Header
+            # Header row
             print(f"\n=== {sev_label} ===")
             print(f"{'':>4} {'Issue ID':<10} {'CWE-ID':<10} {'Module':<30} {'Mitigation Status':<20} {'Remediation Status':<20}")
             
-            # Rows
+            # Issue rows
             for issue in categorized[sev_label]:
                 issue_id = issue.get("issueid")
                 module = issue.get("module") or "(No Module)"
                 cweid = issue.get("cweid")
                 mitigation_status = issue.get("mitigation_status") or "None"
                 remediation_status = issue.get("remediation_status") or "None"
+                idx = issue_id
             
                 print(f"  [{idx:<2}] {issue_id:<10} CWE-{cweid:<6} {module:<30} {mitigation_status:<20} {remediation_status:<20}")
                 selectable.append(issue_id)
-                idx += 1
+                # idx += 1 (not used)
 
     if not selectable:
         print("⚠️  No issues found for the selected severity.")
@@ -400,7 +401,7 @@ def save_output(content: str, args, task_name: str):
 
     prefix = getattr(args, "prefix", "")
     identifier = getattr(args, "app_id", getattr(args, "app_name", "output"))
-    ext = "xml"  # default save as XML; PDF tasks can override
+    ext = "xml"  # Default save as XML; PDF tasks can override
 
     filename = f"{prefix}{task_name}_{identifier}.{ext}"
     file_path = os.path.join(output_dir, filename)
@@ -420,7 +421,7 @@ def pretty_print_xml(xml_string: str):
         pretty = dom.toprettyxml()
         print(pretty)
     except Exception:
-        # fallback if parsing fails
+        # Fallback if parsing fails
         print(xml_string)
 
 def get_veracode_api_url(region: str) -> str:
