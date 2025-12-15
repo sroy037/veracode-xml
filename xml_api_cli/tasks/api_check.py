@@ -167,6 +167,7 @@ def get_user_details(user_id: str, region: str):
             else:
                 print("\n🔐 API Credential Details:")
                 print(f"   🆔 API ID: {api_creds.get('api_id')[:4]}{'*' * (len(api_creds.get('api_id'))//2 - 4)}{api_creds.get('api_id')[len(api_creds.get('api_id'))//2:]}")
+                print(f"   📅 Created on: {api_creds.get('created_ts')}")
                 exp_ts = api_creds.get("expiration_ts")
                 print(f"   📅 Expiration: {exp_ts}")
                 try:
