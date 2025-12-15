@@ -493,7 +493,7 @@
                     <button id="clear-all-btn" class="btn btn-primary" onclick="clearAll()">
                         <i class="fas fa-redo-alt" aria-hidden="true"></i> Clear All
                     </button>
-                    <button id="help-btn" class="btn btn-outline" onclick="showHelp()">
+                    <button id="help-btn" class="btn btn-outline" onclick="startVeracliTour()">
                         <i class="fas fa-question-circle" aria-hidden="true"></i> Help
                     </button>
                 </div>
@@ -1426,19 +1426,19 @@
             document.getElementById('det-xml-target-input').value = '';
         }
 
-        function showHelp() {
-            consoleOutput.innerHTML += '\n' +
-                '<span style="color: var(--primary-color);">--- HELP ---</span>\n' +
-                '1. API Utilities: Check Creds or List Apps.\n' +
-                '2. REST Lookup: Enter App Name/ID and click App Info or Summary Report.\n' +
-                '3. XML Commands: Fill App ID/Name, select Scan Type, optionally Build ID, then click Build List/Info.\n' +
-                '4. XML Reports: Use the App ID/Name field, select **Format** (XML/PDF), optionally set a **Prefix**, and click **Generate & Download**.\n' +
-                '5. Mitigation Review: Enter App Name/ID, **select ID/Name mode**, choose **Severity**, and click **Review Mitigations**.\n' +
-                '6. Direct Command: Type any Veracli command in the prompt below.\n' +
-                '--------------------\n';
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
-            cliInput.focus();
-        }
+        // function showHelp() {
+        //     consoleOutput.innerHTML += '\n' +
+        //         '<span style="color: var(--primary-color);">--- HELP ---</span>\n' +
+        //         '1. API Utilities: Check Creds or List Apps.\n' +
+        //         '2. REST Lookup: Enter App Name/ID and click App Info or Summary Report.\n' +
+        //         '3. XML Commands: Fill App ID/Name, select Scan Type, optionally Build ID, then click Build List/Info.\n' +
+        //         '4. XML Reports: Use the App ID/Name field, select **Format** (XML/PDF), optionally set a **Prefix**, and click **Generate & Download**.\n' +
+        //         '5. Mitigation Review: Enter App Name/ID, **select ID/Name mode**, choose **Severity**, and click **Review Mitigations**.\n' +
+        //         '6. Direct Command: Type any Veracli command in the prompt below.\n' +
+        //         '--------------------\n';
+        //     consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        //     cliInput.focus();
+        // }
 
         // --- Environment Modal Helpers (Open / Close / Save / Drag) ---
         const ENV_EXAMPLE = `VERACODE_API_KEY_ID=YOUR_API_KEY_ID\nVERACODE_API_KEY_SECRET=YOUR_API_KEY_SECRET`;
@@ -1824,5 +1824,23 @@
             e.preventDefault();
         });
     </script>
+
+    <div id="tour-pref-modal" class="tour-modal hidden">
+    <div class="tour-modal-content">
+        <h3>Show walkthrough on startup?</h3>
+        <p>You can always restart it from Help.</p>
+
+        <div class="tour-modal-actions">
+        <button id="tour-no">No</button>
+        <button id="tour-yes">Yes</button>
+        </div>
+    </div>
+    </div>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/intro.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding-overrides.css') }}">
+
+    <script src="{{ url_for('static', filename='js/intro.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/onboarding.js') }}"></script>
 </body>
 </html>

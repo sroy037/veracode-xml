@@ -1,0 +1,92 @@
+/* Onboarding preference modal */
+.tour-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 100000001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tour-modal.hidden {
+  display: none;
+}
+
+.tour-modal-content {
+  background: #111827;
+  color: #e5e7eb;
+  padding: 24px;
+  border-radius: 12px;
+  width: 360px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+}
+
+.tour-modal-content h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.tour-modal-content p {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.tour-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tour-modal-actions button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#tour-no {
+  background: #374151;
+  color: #e5e7eb;
+}
+
+#tour-yes {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Intro.js dark theme overrides */
+.introjs-tooltip {
+  background: #0f172a;
+  color: #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+  max-width: 260px;
+}
+
+.introjs-tooltiptext {
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.introjs-tooltip-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.introjs-button {
+  background: #1f2937;
+  color: #e5e7eb;
+  border: none;
+}
+
+.introjs-button:hover {
+  background: #374151;
+}
+
+.introjs-skipbutton {
+  color: #9ca3af;
+}
