@@ -857,6 +857,11 @@
         const regionSelect = document.getElementById('region-select');
         const envSelect = document.getElementById('env-select');
         const useDefaultCheckbox = document.getElementById('use-default-checkbox');
+        // Wire up environment management buttons
+        const refreshBtn = document.getElementById('env-refresh-btn');
+        const addBtn = document.getElementById('env-add-btn');
+        const editBtn = document.getElementById('env-edit-btn');
+        const deleteBtn = document.getElementById('env-delete-btn');
 
         let commandHistory = [];
         let historyIndex = -1;
@@ -893,6 +898,42 @@
             // Re-enable the CLI input is handled by cli_prompt, but restore status text here
             statusText.textContent = statusDot.classList.contains('connected') ? 'Connected' : 'Disconnected';
             cliInput.focus();
+        }
+
+        function updateEnvButtonsState() {
+            const useDefault = useDefaultCheckbox && useDefaultCheckbox.checked;
+
+            // environment is considered set only if authorized
+            const envIsSet = !!authorizedEnv;
+
+            // allowActions ONLY if:
+            //  - not using default AND environment is authorized
+            const allowActions = !useDefault && envIsSet;
+
+            // --- Apply state ---
+            setSidebarButtonsEnabled(allowActions);
+            cliInput.disabled = !allowActions;
+
+            // If nothing is allowed, show helpful placeholder
+            cliInput.placeholder = allowActions
+                ? ''
+                : 'Please select and authorize an environment first.';
+
+            // Disable/enable env dropdown based on default checkbox
+            if (envSelect) envSelect.disabled = useDefault;
+
+            // Edit/Delete buttons should only work when environment exists AND not default mode
+            const canModifyEnv = envIsSet && !useDefault;
+
+            if (editBtn) {
+                editBtn.disabled = !canModifyEnv;
+                editBtn.style.opacity = canModifyEnv ? '1' : '0.5';
+            }
+
+            if (deleteBtn) {
+                deleteBtn.disabled = !canModifyEnv;
+                deleteBtn.style.opacity = canModifyEnv ? '1' : '0.5';
+            }
         }
 
         // Function to enable/disable all primary action buttons in the sidebar
@@ -1562,6 +1603,7 @@
                     displayMessage(`✅ Successfully authorized for environment: ${selectedEnv}`, 'success');
                     // Now update UI state, which will enable the buttons/CLI
                     envSelect.value = authorizedEnv;
+                    updateEnvButtonsState();
                 } else {
                     // Failure: Authorization failed
                     authorizedEnv = null;
@@ -1572,6 +1614,7 @@
                     }).catch(() => {
                         displayMessage(`❌ Authorization failed for ${selectedEnv}. Invalid passphrase.`, 'error');
                     });
+                    updateEnvButtonsState();
                 }
             })
             .catch(err => {
@@ -1678,46 +1721,6 @@
             try {
                 refreshEnvs();
             } catch (e) {}
-
-            // Wire up environment management buttons
-            const refreshBtn = document.getElementById('env-refresh-btn');
-            const addBtn = document.getElementById('env-add-btn');
-            const editBtn = document.getElementById('env-edit-btn');
-            const deleteBtn = document.getElementById('env-delete-btn');
-
-            function updateEnvButtonsState() {
-                const useDefault = useDefaultCheckbox && useDefaultCheckbox.checked;
-                // Use the AUTHORIZED environment name for state, not the selected one
-                const envIsSet = !!authorizedEnv; 
-                // Disable CLI if using default or no authorized env
-                cliInput.disabled = useDefault || envIsSet;
-                setSidebarButtonsEnabled(false);
-                
-                // If using default, we allow use
-                if (useDefault) {
-                    if (editBtn) editBtn.disabled = true;
-                    if (deleteBtn) deleteBtn.disabled = true;
-                    if (editBtn) editBtn.style.opacity = '0.5';
-                    if (deleteBtn) deleteBtn.style.opacity = '0.5';
-                    if (envSelect) envSelect.disabled = true;
-                    setSidebarButtonsEnabled(false);
-                    cliInput.disabled = false;
-                    cliInput.placeholder = 'Please select and authorize an environment first.';
-                    authorizedEnv = null; // Clear authorization state if default is checked
-                } else {
-                    const selected = true; // We allow edit/delete if environment is selected
-                    if (editBtn) editBtn.disabled = !selected;
-                    if (deleteBtn) deleteBtn.disabled = !selected;
-                    if (editBtn) editBtn.style.opacity = selected ? '1' : '0.5';
-                    if (deleteBtn) deleteBtn.style.opacity = selected ? '1' : '0.5';
-                    if (envSelect) envSelect.disabled = false;
-                    
-                    // Enable sidebar and CLI only if an environment is authorized
-                    setSidebarButtonsEnabled(selected);
-                    cliInput.disabled = !selected;
-                    cliInput.placeholder = '';
-                }
-            }
 
             // Update state when selection changes
             if (envSelect) envSelect.addEventListener('change', (e) => {
